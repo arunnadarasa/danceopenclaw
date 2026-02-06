@@ -14,6 +14,56 @@ export type Database = {
   }
   public: {
     Tables: {
+      agent_tasks: {
+        Row: {
+          agent_id: string | null
+          completed_at: string | null
+          created_at: string
+          error_message: string | null
+          id: string
+          message: string
+          response: Json | null
+          session_key: string | null
+          status: string
+          task_type: string
+          user_id: string
+        }
+        Insert: {
+          agent_id?: string | null
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          message: string
+          response?: Json | null
+          session_key?: string | null
+          status?: string
+          task_type?: string
+          user_id: string
+        }
+        Update: {
+          agent_id?: string | null
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          message?: string
+          response?: Json | null
+          session_key?: string | null
+          status?: string
+          task_type?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_tasks_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       agents: {
         Row: {
           auto_tip_enabled: boolean
@@ -49,6 +99,50 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      openclaw_connections: {
+        Row: {
+          agent_id: string | null
+          created_at: string
+          id: string
+          last_ping_at: string | null
+          status: string
+          updated_at: string
+          user_id: string
+          webhook_token: string
+          webhook_url: string
+        }
+        Insert: {
+          agent_id?: string | null
+          created_at?: string
+          id?: string
+          last_ping_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+          webhook_token: string
+          webhook_url: string
+        }
+        Update: {
+          agent_id?: string | null
+          created_at?: string
+          id?: string
+          last_ping_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+          webhook_token?: string
+          webhook_url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "openclaw_connections_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {

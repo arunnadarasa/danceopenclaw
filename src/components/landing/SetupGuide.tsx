@@ -1,6 +1,5 @@
 import { motion } from "framer-motion";
-import { KeyRound, Coins, Rocket, ExternalLink } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { KeyRound, Coins, Rocket, Terminal, ExternalLink } from "lucide-react";
 
 const steps = [
   {
@@ -20,8 +19,16 @@ const steps = [
     link: { label: "Circle Faucet", url: "https://faucet.circle.com/" },
   },
   {
-    icon: Rocket,
+    icon: Terminal,
     step: "03",
+    title: "Connect OpenClaw",
+    description:
+      "Install OpenClaw, enable webhooks in your config, then paste your webhook URL and token into the dashboard.",
+    link: { label: "OpenClaw Docs", url: "https://openclaw.ai" },
+  },
+  {
+    icon: Rocket,
+    step: "04",
     title: "Deploy & Test",
     description:
       "Sign in with Google, create your agent wallet, send a test tip, and try the x402 echo payment — all from the dashboard.",
@@ -41,15 +48,15 @@ export const SetupGuide = () => {
       <div className="container mx-auto px-4">
         <div className="mx-auto max-w-3xl text-center">
           <h2 className="font-display text-3xl font-bold md:text-4xl">
-            Hackathon <span className="text-gradient-accent">Setup Guide</span>
+            Getting <span className="text-gradient-accent">Started</span>
           </h2>
           <p className="mt-4 text-muted-foreground">
-            Get up and running in three steps.
+            Get up and running in four steps.
           </p>
         </div>
 
         {/* Steps */}
-        <div className="mx-auto mt-14 grid max-w-4xl gap-8 md:grid-cols-3">
+        <div className="mx-auto mt-14 grid max-w-5xl gap-8 md:grid-cols-2 lg:grid-cols-4">
           {steps.map((s, i) => (
             <motion.div
               key={s.step}

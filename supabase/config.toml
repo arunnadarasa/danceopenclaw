@@ -1,1 +1,13 @@
 project_id = "aqfhnuyvvgrglylvhxjr"
+
+[functions.openclaw-register]
+verify_jwt = false
+
+[functions.openclaw-status]
+verify_jwt = false
+
+[functions.openclaw-proxy]
+verify_jwt = false
+
+[functions.openclaw-webhook-callback]
+verify_jwt = false

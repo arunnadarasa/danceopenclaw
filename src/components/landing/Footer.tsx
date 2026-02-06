@@ -13,7 +13,7 @@ export const Footer = () => {
           </div>
 
           <p className="text-sm text-muted-foreground">
-            Built for the global dance community · Hackathon Edition
+            Built for the global dance community
           </p>
 
           <div className="flex items-center gap-6 text-sm text-muted-foreground">
