@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Zap, Users, ShoppingBag } from "lucide-react";
+import { Link } from "react-router-dom";
 
 const danceStyles = [
   "Hip-Hop", "Breaking", "Popping", "Locking", "Contemporary",
@@ -60,11 +61,13 @@ export const HeroSection = () => {
             transition={{ duration: 0.6, delay: 0.4 }}
             className="mt-10 flex flex-wrap items-center justify-center gap-4"
           >
-            <Button size="lg" className="gap-2 text-base">
-              Get Started <ArrowRight className="h-4 w-4" />
+            <Button asChild size="lg" className="gap-2 text-base">
+              <Link to="/auth">
+                Get Started <ArrowRight className="h-4 w-4" />
+              </Link>
             </Button>
-            <Button size="lg" variant="outline" className="gap-2 text-base">
-              Learn More
+            <Button asChild size="lg" variant="outline" className="gap-2 text-base">
+              <a href="#how-it-works">Learn More</a>
             </Button>
           </motion.div>
 
