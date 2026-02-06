@@ -12,7 +12,7 @@ const faqs = [
   },
   {
     q: "Is real money involved?",
-    a: "We use testnet tokens (Base Sepolia ETH, Solana Devnet SOL, Story Aeneid IP) and testnet USDC. No real funds are at risk. Use the faucet links in the setup guide to get free test tokens.",
+    a: "The platform currently runs on testnets — Base Sepolia ETH, Solana Devnet SOL, Story Aeneid IP, and testnet USDC. No real funds are at risk. You can grab free test tokens from the faucet links in the setup guide.",
   },
   {
     q: "Which dance styles are supported?",
