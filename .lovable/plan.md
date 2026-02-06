@@ -1,115 +1,176 @@
 
 
-# Dance OpenClaw — Where Dance Meets Agentic Commerce
+# Remove Hackathon References + Implement OpenClaw Agent Backbone
 
-An all-in-one platform for the global dance community, connecting dancers, fans, and organisers through autonomous AI agents with multi-chain wallets, x402 payments, and Shopify-powered commerce.
+This plan covers two things: (1) cleaning up all hackathon-specific language across the app, and (2) building the OpenClaw integration as the AI agent engine powering Dance OpenClaw.
 
 ---
 
-## 1. Landing Page
+## Part 1: Remove Hackathon References
 
-- **⚠️ Autonomy warning banner** at the top: *"OpenClaw agents act autonomously. Some actions may be beneficial, others unpredictable. Use a burner email to sign in."*
-- **Hero section**: "Where Dance Meets Agentic Commerce" — showcasing the diversity of dance styles (hip-hop, breaking, contemporary, popping, ballet, Krump, and more)
-- Visual diagram of Dancer ↔ Fan ↔ Organiser agent interactions
-- Explainer sections: How x402 works, what agents do, USDC payments
-- Role showcase cards: Dancer, Fan, Organiser — what each agent does for you
-- **In-app hackathon setup guide** section with API keys, faucets, and getting started steps
-- FAQ section and CTA buttons to sign in
+The following files contain hackathon-related wording that will be updated to reflect a personal project:
 
-## 2. Authentication & Onboarding
+### Footer (`src/components/landing/Footer.tsx`)
+- Line 16: Change `"Built for the global dance community · Hackathon Edition"` to `"Built for the global dance community"`
 
-- **Google Sign-In via Supabase Auth** — primary login method
-- Prominent "burner email" recommendation on the sign-in screen
-- **Mandatory disclaimer checkbox**: *"I understand that OpenClaw agents operate autonomously and may perform actions — some beneficial, some potentially undesirable — on my behalf. I accept full responsibility."*
-- Role selection after first sign-in: **Dancer**, **Fan**, or **Organiser**
-- Dancers select their dance style(s) during onboarding (hip-hop, breaking, popping, locking, contemporary, ballet, Krump, house, waacking, etc.)
-- Auto-creation of profile, wallet record, and initial agent on signup
+### SetupGuide (`src/components/landing/SetupGuide.tsx`)
+- Line 44: Change `"Hackathon Setup Guide"` heading to just `"Getting Started"` or `"Setup Guide"`
+- The section content itself (Privy keys, faucets, deploy steps) stays -- it's useful regardless of context
 
-## 3. Database Schema (Supabase)
+### FAQ (`src/components/landing/FAQ.tsx`)
+- The FAQ about testnet tokens (line 15-16) currently reads like a hackathon demo. Reword to frame it as "the platform currently runs on testnets" rather than implying it's a temporary hackathon setup
 
-- **profiles**: user_id, display_name, avatar_url, bio, wallet_address, dance_styles (array — for dancers)
-- **user_roles**: user_id, role (dancer/fan/organiser)
-- **agents**: agent_id, user_id, name, status, budget_limit, auto_tip_enabled, config
-- **agent_wallets**: agent_id, wallet_id (Privy), address, chain_type (ethereum/solana/story)
-- **agent_tips**: sender/recipient agent IDs, amount, chain_type, tx_hash, status
-- **agent_native_transfers**: agent_id, recipient, amount, chain_type, tx_hash, status
-- **agent_payments**: agent_id, recipient, amount, network, target_url, tx_hash, status (x402)
-- **events**: organiser_id, title, description, date, venue, ticket_price, capacity, dance_styles (array), status
-- **wallets**: user_id, usdc_balance
-- Row-Level Security on all tables
+### Navbar (`src/components/landing/Navbar.tsx`)  
+- Line 25: The "Setup Guide" nav link label stays but points to the renamed section
 
-## 4. Edge Functions (Privy + Multi-Chain)
+No other files contain hackathon-specific language -- the Hero, Auth, Onboarding, Explainers, RoleCards, AgentDiagram, X402FlowVisual, and WarningBanner are already clean.
 
-- **create-agent-wallet**: Creates wallets via Privy for Base (ETH), Solana, or Story (IP)
-- **get-agent-wallet**: Fetches wallet info + live on-chain balances
-- **send-native-token**: ETH/SOL/IP test transfers via Privy RPC
-- **tip-agent**: Agent-to-agent tipping across all three chains
-- **execute-x402-payment**: EVM x402 USDC payments (Base + Story)
-- **execute-x402-payment-solana**: Solana x402 USDC payments
+---
 
-## 5. Agent Dashboard (Post-Login Home)
+## Part 2: OpenClaw Agent Backbone Integration
 
-- Personal **Agent card**: name, status, multi-chain wallet balances
-- **Chain tabs** (ETH / SOL / Story) with native + USDC balances
-- Wallet creation buttons per chain with testnet faucet links
-- Agent configuration: daily budget, auto-tip rules, spending limits
-- Activity feed: tips, purchases, payouts, x402 payments in real time
-- Quick actions: Tip a dancer, Browse shop, View events, Test x402
+### Step 1 -- Database Migration
 
-## 6. Shopify-Powered Marketplace
+Create two new tables with RLS policies:
 
-- Real Shopify products in a browsable grid — dance merch, content packs, gear for all styles
-- Product cards with images, titles, prices from Storefront API
-- Product detail pages with Add to Cart (Zustand-managed cart)
-- Cart drawer → Shopify hosted checkout
-- Empty state with guidance to add products via chat
+**`openclaw_connections`**
+| Column | Type | Notes |
+|---|---|---|
+| id | UUID (PK) | Default gen_random_uuid() |
+| user_id | UUID | NOT NULL, references auth.users |
+| agent_id | UUID | References agents table |
+| webhook_url | TEXT | User's OpenClaw gateway URL |
+| webhook_token | TEXT | Shared hook token for auth |
+| status | TEXT | connected / disconnected / pending |
+| last_ping_at | TIMESTAMPTZ | Last successful health check |
+| created_at | TIMESTAMPTZ | Default now() |
+| updated_at | TIMESTAMPTZ | Default now() |
 
-## 7. Events Hub
+**`agent_tasks`**
+| Column | Type | Notes |
+|---|---|---|
+| id | UUID (PK) | Default gen_random_uuid() |
+| agent_id | UUID | References agents |
+| user_id | UUID | NOT NULL |
+| task_type | TEXT | tip, wallet_create, x402_payment, event_create, custom |
+| message | TEXT | Prompt sent to OpenClaw |
+| session_key | TEXT | For multi-turn conversations |
+| status | TEXT | pending / running / completed / failed |
+| response | JSONB | OpenClaw's response payload |
+| error_message | TEXT | Error details if failed |
+| created_at | TIMESTAMPTZ | Default now() |
+| completed_at | TIMESTAMPTZ | Null until done |
 
-- Browse upcoming events: battles, cyphers, workshops, showcases — across all dance styles
-- Filter events by dance style, date, location
-- Event detail page with ticket purchase flow
-- Organisers create/manage events, tagging relevant dance styles
-- Post-event payout dashboard with revenue split visualisation
-- Live tipping during events
+RLS on both tables: users can only read/write their own records.
 
-## 8. Tipping & x402 Payment Flows
+### Step 2 -- Edge Functions
 
-- Tip button on profiles/posts: select chain → confirm → send
-- Tips history with blockchain explorer links
-- Self-tip test button for trying the flow
-- x402 echo test: one-click USDC micro-payment to test endpoint
-- Native transfer + x402 payment history views
-- Visual x402 flow: Request → 402 → Sign → Pay → Access Unlocked
+Four new edge functions, all with CORS headers and JWT validation in code:
 
-## 9. Dance Network View
+1. **`openclaw-register`** (POST) -- Saves webhook URL + token, pings the instance to verify connectivity, updates `openclaw_connections` status
+2. **`openclaw-status`** (GET) -- Looks up connection, pings the webhook URL, returns reachability + last ping time
+3. **`openclaw-proxy`** (POST) -- Creates an `agent_tasks` record, sends the task to the user's OpenClaw instance via `POST {webhookUrl}/hooks/agent`, returns task ID for async tracking
+4. **`openclaw-webhook-callback`** (POST) -- Callback endpoint for OpenClaw to report task completion; validates token, updates task status and response
 
-- Interactive visualisation of agent connections across the dance ecosystem
-- Nodes for dancers (colour-coded by style), fans, organisers
-- Edges for payment/tip flows between agents
-- Leaderboard: top-tipped dancers, most active fans, biggest events
-- Stats: total transactions, volume, active agents
+### Step 3 -- Dashboard Layout with Sidebar Navigation
 
-## 10. Hackathon Documentation (In-App)
+Build the main app layout that wraps all authenticated pages:
 
-- Setup guide: Privy keys, secrets, testnet wallet funding
-- Network reference: chain IDs, RPCs, USDC addresses, explorers
-- Faucet links for Base ETH, USDC, SOL, Story IP
-- Architecture diagram: Frontend → Edge Functions → Privy/RPC → Database
-- Code snippets for wallet creation, tipping, x402 patterns
+- **Sidebar**: Dashboard, Shop, Events, Wallet, Network, Docs, Settings
+- **Top bar**: User avatar, agent status indicator, wallet balance summary
+- Responsive -- collapses to a mobile drawer
+- Dark mode throughout
 
-## 11. Navigation & Layout
+Create placeholder pages for each route: `/dashboard`, `/shop`, `/events`, `/wallet`, `/network`, `/docs`, `/settings`
 
-- Sidebar: Dashboard, Shop, Events, Wallet, Network, Docs, Settings
-- Top bar: avatar, agent status, wallet balance, cart icon with badge
-- Responsive for desktop and mobile
-- Dark mode with vibrant accent colours
+### Step 4 -- OpenClaw Connection Card (Dashboard)
 
-## 12. Design System
+A card component on the Dashboard page:
 
-- Clean, modern fintech-meets-dance aesthetic — inclusive of all styles
-- Card-based layouts with smooth transitions
-- Chain-specific colours (blue for Base, purple for Solana, teal for Story)
-- Dance-style colour tags and iconography throughout
-- Status indicators and micro-animations for agent activity
+- Shows connection status (connected/disconnected/pending) with a coloured indicator
+- Input fields for webhook URL and webhook token
+- "Test Connection" button calling `openclaw-status`
+- "Connect" button calling `openclaw-register`
+- Displays last successful ping timestamp
+- Link to OpenClaw docs for setup instructions
+
+### Step 5 -- Agent Command Center (Dashboard)
+
+The main interaction panel for the OpenClaw-backed agent:
+
+- Quick action buttons with pre-built prompts:
+  - "Create wallet on Base"
+  - "Tip top dancer 0.0001 ETH"
+  - "Check my balances"
+  - "Create a battle event"
+- Custom message input for freeform agent commands
+- Task history feed showing status (pending / running / completed / failed) with expandable response details
+- Enable realtime on `agent_tasks` table for live status updates
+
+### Step 6 -- Update Landing Page Setup Section
+
+Rework the SetupGuide component:
+- Rename heading from "Hackathon Setup Guide" to "Getting Started"
+- Keep the 3-step flow (Privy keys, fund wallets, deploy)
+- Add a 4th step: "Connect OpenClaw" -- install OpenClaw, enable webhooks, paste URL into the dashboard
+- Keep the supported networks reference card
+
+---
+
+## Technical Details
+
+### OpenClaw Webhook API (outbound calls from edge functions)
+
+```text
+POST {webhookUrl}/hooks/agent
+Headers: Authorization: Bearer {token}
+Body: {
+  "message": "Create a new wallet on Base Sepolia",
+  "name": "DanceOpenClaw",
+  "sessionKey": "dance:task:{taskId}",
+  "deliver": false,
+  "timeoutSeconds": 120
+}
+```
+
+### New Files Created
+
+```text
+supabase/functions/openclaw-register/index.ts
+supabase/functions/openclaw-status/index.ts
+supabase/functions/openclaw-proxy/index.ts
+supabase/functions/openclaw-webhook-callback/index.ts
+src/components/dashboard/DashboardLayout.tsx
+src/components/dashboard/Sidebar.tsx
+src/components/dashboard/TopBar.tsx
+src/components/dashboard/OpenClawConnectionCard.tsx
+src/components/dashboard/AgentTaskPanel.tsx
+src/components/dashboard/AgentCard.tsx
+src/pages/Shop.tsx (placeholder)
+src/pages/Events.tsx (placeholder)
+src/pages/Wallet.tsx (placeholder)
+src/pages/Network.tsx (placeholder)
+src/pages/Docs.tsx (placeholder)
+src/pages/Settings.tsx (placeholder)
+```
+
+### Files Modified
+
+```text
+src/components/landing/Footer.tsx -- remove "Hackathon Edition"
+src/components/landing/SetupGuide.tsx -- rename heading, add OpenClaw step
+src/components/landing/FAQ.tsx -- reword testnet answer
+src/pages/Dashboard.tsx -- replace placeholder with full agent dashboard
+src/App.tsx -- add new routes wrapped in DashboardLayout
+supabase/config.toml -- add edge function entries with verify_jwt = false
+```
+
+### Implementation Sequence
+
+1. Database migration (tables + RLS)
+2. Hackathon text cleanup (Footer, SetupGuide, FAQ)
+3. Edge functions (register, status, proxy, callback)
+4. Dashboard layout + sidebar + placeholder pages + routing
+5. OpenClaw connection card + agent command center
+6. Enable realtime on agent_tasks
 
