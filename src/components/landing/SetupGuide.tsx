@@ -36,10 +36,17 @@ const steps = [
   },
 ];
 
-const networks = [
+const testnetNetworks = [
   { name: "Base Sepolia", token: "ETH", chainId: "84532", color: "bg-chain-eth" },
   { name: "Solana Devnet", token: "SOL", chainId: "—", color: "bg-chain-sol" },
   { name: "Story Aeneid", token: "IP", chainId: "1315", color: "bg-chain-story" },
+];
+
+const mainnetNetworks = [
+  { name: "Base", token: "ETH + USDC", chainId: "8453", color: "bg-chain-eth" },
+  { name: "Ethereum", token: "ETH + USDC", chainId: "1", color: "bg-chain-eth" },
+  { name: "Solana", token: "SOL", chainId: "—", color: "bg-chain-sol" },
+  { name: "Story", token: "IP", chainId: "1514", color: "bg-chain-story" },
 ];
 
 export const SetupGuide = () => {
@@ -87,18 +94,37 @@ export const SetupGuide = () => {
         </div>
 
         {/* Network reference */}
-        <div className="mx-auto mt-14 max-w-2xl">
+        <div className="mx-auto mt-14 max-w-4xl">
           <h3 className="text-center font-display text-lg font-semibold">Supported Networks</h3>
-          <div className="mt-6 grid gap-3 sm:grid-cols-3">
-            {networks.map((n) => (
-              <div key={n.name} className="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3">
-                <div className={`h-3 w-3 rounded-full ${n.color}`} />
-                <div>
-                  <p className="text-sm font-medium">{n.name}</p>
-                  <p className="text-xs text-muted-foreground">{n.token} · Chain {n.chainId}</p>
-                </div>
+          <div className="mt-6 grid gap-6 md:grid-cols-2">
+            <div>
+              <p className="mb-3 text-center text-xs font-medium uppercase tracking-wider text-muted-foreground">Testnets</p>
+              <div className="grid gap-3">
+                {testnetNetworks.map((n) => (
+                  <div key={n.name} className="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3">
+                    <div className={`h-3 w-3 rounded-full ${n.color}`} />
+                    <div>
+                      <p className="text-sm font-medium">{n.name}</p>
+                      <p className="text-xs text-muted-foreground">{n.token} · Chain {n.chainId}</p>
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
+            </div>
+            <div>
+              <p className="mb-3 text-center text-xs font-medium uppercase tracking-wider text-muted-foreground">Mainnets</p>
+              <div className="grid gap-3">
+                {mainnetNetworks.map((n) => (
+                  <div key={n.name} className="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3">
+                    <div className={`h-3 w-3 rounded-full ${n.color}`} />
+                    <div>
+                      <p className="text-sm font-medium">{n.name}</p>
+                      <p className="text-xs text-muted-foreground">{n.token} · Chain {n.chainId}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </div>
