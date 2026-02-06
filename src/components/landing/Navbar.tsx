@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Zap } from "lucide-react";
+import { Link } from "react-router-dom";
 
 export const Navbar = () => {
   return (
@@ -29,9 +30,11 @@ export const Navbar = () => {
           </a>
         </div>
 
-        <Button className="gap-2">
-          <Zap className="h-4 w-4" />
-          Sign In
+        <Button asChild className="gap-2">
+          <Link to="/auth">
+            <Zap className="h-4 w-4" />
+            Sign In
+          </Link>
         </Button>
       </div>
     </nav>
