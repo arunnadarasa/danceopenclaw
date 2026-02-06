@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.openclaw-webhook-callback]
 verify_jwt = false
+
+[functions.agent-wallet]
+verify_jwt = false
