@@ -23,7 +23,7 @@ interface SendTokenFormProps {
 
 type TokenType = "native" | "usdc";
 
-const USDC_CHAINS = ["base_sepolia", "base", "ethereum"];
+const USDC_CHAINS = ["base_sepolia", "base"];
 
 export const SendTokenForm = ({ wallets, onSendNative, onSendUsdc, loading }: SendTokenFormProps) => {
   const [chain, setChain] = useState<string>("");
