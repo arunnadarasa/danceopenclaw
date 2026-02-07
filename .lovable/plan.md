@@ -1,54 +1,61 @@
 
 
-## Fix Agent Diagram: Per-Node Corner Alignment
+## Fix Agent Diagram: Framer Motion Overriding CSS Transforms
 
-### Problem
-All three nodes currently use identical centering (`-translate-x-1/2 -translate-y-1/2`), but each node needs to touch its triangle corner from a different direction:
-
-- **Fan Agent** (bottom-left): The box should have its **top-right corner** touching the triangle vertex -- so the box sits below-left of the corner
-- **Dancer Agent** (top): The box should sit **above** the vertex with the label text appearing just below the vertex, centered at the top of the triangle
-- **Organiser Agent** (bottom-right): Already looks perfect with center alignment -- no change needed
+### Root Cause
+Framer Motion's `scale` animation sets an **inline `transform`** style on the `motion.div`. This completely overrides Tailwind's CSS `transform` (which includes the translate classes). So `-translate-x-1/2`, `-translate-y-full`, etc. are being thrown away at runtime -- explaining why nothing visually changed.
 
 ### Solution
+Separate concerns into two nested elements:
+- **Outer plain `div`**: Handles positioning with Tailwind translate classes (no Framer Motion interference)
+- **Inner `motion.div`**: Handles the scale/opacity entrance animation
 
-Add per-node alignment configuration to control which part of the box anchors to the triangle vertex. Each node gets a custom CSS transform class:
-
-```text
-Dancer (top vertex):
-  Before: box centered on vertex
-  After:  box above vertex, label at vertex top
-  Transform: -translate-x-1/2  -translate-y-full
-
-Fan (bottom-left vertex):
-  Before: box centered on vertex
-  After:  box below-left, top-right corner at vertex
-  Transform: -translate-x-full  (no y translate)
-
-Organiser (bottom-right vertex):
-  No change: -translate-x-1/2  -translate-y-1/2
-```
+This way the translate transforms live on a different element from the animated transforms, and they don't conflict.
 
 ### Changes (single file: `src/components/landing/AgentDiagram.tsx`)
 
-**1. Add per-node alignment class to the nodes array**
+**Restructure the node rendering (lines 79-98)**
 
-Add a `className` property to each node definition:
-
-- Dancer Agent: `"-translate-x-1/2 -translate-y-full"` -- centers horizontally, pushes box fully above the point so bottom-center edge sits at the vertex; label appears at the vertex (top of triangle)
-- Fan Agent: `"-translate-x-full"` -- pushes box fully to the left so right edge is at the vertex; top-right corner touches the triangle corner
-- Organiser Agent: `"-translate-x-1/2 -translate-y-1/2"` -- keep existing centered behavior (confirmed perfect)
-
-**2. Use per-node className in the motion.div**
-
-Replace the fixed class `className="absolute -translate-x-1/2 -translate-y-1/2"` with the node-specific transform class:
+Replace the current single `motion.div` with a nested structure:
 
 ```tsx
-className={`absolute ${node.className}`}
+{nodes.map((node, i) => (
+  <div
+    key={node.label}
+    className={`absolute ${node.className}`}
+    style={{ left: node.x, top: node.y }}
+  >
+    <motion.div
+      initial={{ scale: 0, opacity: 0 }}
+      whileInView={{ scale: 1, opacity: 1 }}
+      viewport={{ once: true }}
+      transition={{ duration: 0.5, delay: i * 0.2 }}
+    >
+      <div className="relative flex flex-col items-center">
+        <div
+          className="flex h-14 w-14 sm:h-16 sm:w-16 items-center justify-center rounded-2xl border border-border bg-card shadow-lg animate-float"
+          style={{ animationDelay: `${i * 2}s` }}
+        >
+          <span className="text-xl sm:text-2xl">{node.emoji}</span>
+        </div>
+        <span className="absolute top-full mt-1 text-xs sm:text-sm font-semibold whitespace-nowrap">
+          {node.label}
+        </span>
+      </div>
+    </motion.div>
+  </div>
+))}
 ```
 
+Key structural change:
+- The outer `div` gets the `absolute`, position (`left`/`top`), and translate classes -- these are pure CSS and won't be touched by Framer Motion
+- The inner `motion.div` only handles the entrance animation (`scale` + `opacity`) -- its inline `transform` only affects itself, leaving the parent's positioning intact
+
+### Why This Fixes It
+Framer Motion can only override transforms on the element it controls. By moving the positioning transforms to a parent `div`, both systems work independently:
+- Parent: `transform: translate(-50%, -100%)` (from Tailwind, untouched)
+- Child: `transform: scale(1)` (from Framer Motion animation)
+
 ### Technical Summary
-
 Single file: `src/components/landing/AgentDiagram.tsx`
-- Lines 3-7: Add `className` property to each node in the array
-- Line 82: Use `node.className` instead of hardcoded translate classes
-
+- Lines 79-98: Wrap each node in a plain `div` for positioning, nest `motion.div` inside for animation only
