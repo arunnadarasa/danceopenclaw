@@ -36,13 +36,19 @@ serve(async (req) => {
     }
     const userId = user.id;
 
-    const { webhookUrl, webhookToken } = await req.json();
+    let { webhookUrl, webhookToken } = await req.json();
 
     if (!webhookUrl || !webhookToken) {
       return new Response(
         JSON.stringify({ error: "webhookUrl and webhookToken are required" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+
+    // Normalize URL: auto-prepend https:// if missing
+    webhookUrl = webhookUrl.trim();
+    if (!/^https?:\/\//i.test(webhookUrl)) {
+      webhookUrl = `https://${webhookUrl}`;
     }
 
     // Validate URL format

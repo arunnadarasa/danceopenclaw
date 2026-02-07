@@ -50,10 +50,16 @@ serve(async (req) => {
       );
     }
 
+    // Normalize URL in case old record was saved without protocol
+    let webhookUrl = (conn.webhook_url || "").trim();
+    if (!/^https?:\/\//i.test(webhookUrl)) {
+      webhookUrl = `https://${webhookUrl}`;
+    }
+
     // Ping the OpenClaw instance
     let reachable = false;
     try {
-      const pingRes = await fetch(`${conn.webhook_url}/hooks/wake`, {
+      const pingRes = await fetch(`${webhookUrl}/hooks/wake`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${conn.webhook_token}`,
