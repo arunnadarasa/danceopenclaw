@@ -37,7 +37,14 @@ async function callWallet(action: string, params: Record<string, unknown> = {}) 
     body: { action, ...params },
   });
 
-  if (res.error) throw new Error(res.error.message);
+  if (res.error) {
+    let msg = res.error.message;
+    try {
+      const body = await res.error.context?.json?.();
+      if (body?.error) msg = body.error;
+    } catch {}
+    throw new Error(msg);
+  }
   return res.data;
 }
 

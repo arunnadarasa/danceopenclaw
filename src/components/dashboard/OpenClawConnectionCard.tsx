@@ -27,7 +27,14 @@ export const OpenClawConnectionCard = () => {
       const { data, error } = await supabase.functions.invoke("openclaw-status", {
         method: "GET",
       });
-      if (!error && data) {
+      if (error) {
+        let msg = error.message;
+        try {
+          const body = await error.context?.json?.();
+          if (body?.error) msg = body.error;
+        } catch {}
+        console.warn("openclaw-status error:", msg);
+      } else if (data) {
         setStatus(data.status || "not_configured");
         setLastPing(data.last_ping_at);
         if (data.webhook_url) setWebhookUrl(data.webhook_url);
@@ -49,7 +56,14 @@ export const OpenClawConnectionCard = () => {
       const { data, error } = await supabase.functions.invoke("openclaw-register", {
         body: { webhookUrl, webhookToken },
       });
-      if (error) throw error;
+      if (error) {
+        let msg = error.message;
+        try {
+          const body = await error.context?.json?.();
+          if (body?.error) msg = body.error;
+        } catch {}
+        throw new Error(msg);
+      }
       setStatus(data.connection.status);
       setLastPing(data.connection.last_ping_at);
       toast.success(
