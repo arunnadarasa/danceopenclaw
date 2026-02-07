@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 const nodes = [
   { label: "Dancer Agent", emoji: "💃", x: "50%", y: "19%", className: "-translate-x-1/2 -translate-y-full" },
   { label: "Fan Agent", emoji: "🎤", x: "20%", y: "77.5%", className: "-translate-x-full" },
-  { label: "Organiser Agent", emoji: "🎪", x: "80%", y: "77.5%", className: "-translate-x-1/2 -translate-y-1/2" },
+  { label: "Organiser Agent", emoji: "🎪", x: "80%", y: "77.5%", className: "" },
 ];
 
 export const AgentDiagram = () => {
