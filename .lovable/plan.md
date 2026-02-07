@@ -1,27 +1,38 @@
 
 
-## Fix Organiser Agent Position
+## Fix "Invalid webhook URL format" Error
 
-### Problem
-The Organiser Agent box is currently centered on the bottom-right triangle vertex. To mirror the Fan Agent (whose top-right corner touches the left vertex), the Organiser Agent's **top-left corner** should touch the right vertex — placing the box below and to the right of the corner.
+### Root Cause
+The backend function (`openclaw-register`) validates the webhook URL using JavaScript's `new URL()` constructor, which requires a full URL with protocol (e.g., `https://`). If a user enters just the domain like `clawdbot-railway-template-production-26e3.up.railway.app`, validation fails with "Invalid webhook URL format".
 
 ### Solution
-Change the Organiser Agent's `className` from `-translate-x-1/2 -translate-y-1/2` (centered) to no translate at all. By default, CSS positions the element's top-left corner at the coordinate point, which is exactly what we want.
+Make both the frontend and backend more forgiving:
 
-### Changes (single file: `src/components/landing/AgentDiagram.tsx`)
+1. **Frontend (`OpenClawConnectionCard.tsx`)**: Auto-prepend `https://` to the URL before sending it to the backend if the user didn't include a protocol.
+2. **Backend (`openclaw-register/index.ts`)**: Also auto-prepend `https://` before validation as a safety net.
+3. **Better placeholder text**: Update the input placeholder to clearly show the expected format including `https://`.
 
-**Line 6**: Update the Organiser Agent's className:
+### Changes
 
-```text
-Before: className: "-translate-x-1/2 -translate-y-1/2"
-After:  className: ""
+**File 1: `src/components/dashboard/OpenClawConnectionCard.tsx`**
+- In the `handleConnect` function, normalize the webhook URL before sending: if it doesn't start with `http://` or `https://`, prepend `https://`
+- Update the placeholder text to `https://your-server.up.railway.app`
+
+**File 2: `supabase/functions/openclaw-register/index.ts`**
+- Before the `new URL()` validation, normalize the incoming `webhookUrl` by prepending `https://` if no protocol is present
+- This acts as a safety net in case the frontend normalization is bypassed
+
+**File 3: `supabase/functions/openclaw-status/index.ts`**
+- Same normalization for the ping URL, in case an old record was saved without protocol
+
+### Technical Details
+
+URL normalization logic (applied in both frontend and backend):
+```typescript
+let normalizedUrl = webhookUrl.trim();
+if (!/^https?:\/\//i.test(normalizedUrl)) {
+  normalizedUrl = `https://${normalizedUrl}`;
+}
 ```
 
-This means:
-- **Fan Agent** (left): `-translate-x-full` -- top-right corner at vertex (box goes left)
-- **Organiser Agent** (right): `""` -- top-left corner at vertex (box goes right)
-- These two mirror each other symmetrically around the triangle
-
-### Technical Summary
-Single file: `src/components/landing/AgentDiagram.tsx`
-- Line 6: Remove translate classes from Organiser Agent node configuration
+This is a defensive approach: the frontend fixes it before sending, and the backend fixes it again as a safety net.
