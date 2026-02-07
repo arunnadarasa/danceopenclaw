@@ -23,8 +23,8 @@ const steps = [
     step: "03",
     title: "Connect OpenClaw",
     description:
-      "Install OpenClaw, enable webhooks in your config, then paste your webhook URL and token into the dashboard.",
-    link: { label: "OpenClaw Docs", url: "https://openclaw.ai" },
+      "Deploy OpenClaw on Railway, add your OpenRouter API key, then paste your webhook URL and token into the dashboard.",
+    link: { label: "OpenClaw Docs", url: "https://docs.openclaw.ai/install/railway" },
   },
   {
     icon: Rocket,
