@@ -259,6 +259,14 @@ export const OpenClawConnectionCard = () => {
                 Sign up and grab a free key to get started.
               </p>
             </div>
+            <div className="flex items-start gap-2">
+              <span className="mt-0.5 text-xs font-medium text-primary">Port</span>
+              <p className="text-xs text-muted-foreground">
+                In Railway, go to Settings → Networking → Public Networking and change the port
+                from <strong className="text-foreground">3000</strong> to <strong className="text-foreground">8080</strong>.
+                OpenClaw listens on port 8080 by default — using the wrong port will prevent connections.
+              </p>
+            </div>
           </div>
         </div>
       </CardContent>
