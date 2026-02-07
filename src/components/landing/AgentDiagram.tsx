@@ -21,7 +21,7 @@ export const AgentDiagram = () => {
         </div>
 
         {/* Diagram */}
-        <div className="relative mx-auto mt-16 aspect-square max-w-sm sm:max-w-md">
+        <div className="relative mx-auto mt-16 aspect-square max-w-sm sm:max-w-md overflow-visible">
           {/* Connection lines */}
           <svg className="absolute inset-0 h-full w-full" viewBox="0 0 400 400" preserveAspectRatio="xMidYMid meet">
             <motion.line
@@ -86,14 +86,14 @@ export const AgentDiagram = () => {
               viewport={{ once: true }}
               transition={{ duration: 0.5, delay: i * 0.2 }}
             >
-              <div className="flex flex-col items-center gap-2">
+              <div className="relative flex flex-col items-center">
                 <div
                   className="flex h-14 w-14 sm:h-16 sm:w-16 items-center justify-center rounded-2xl border border-border bg-card shadow-lg animate-float"
                   style={{ animationDelay: `${i * 2}s` }}
                 >
                   <span className="text-xl sm:text-2xl">{node.emoji}</span>
                 </div>
-                <span className="text-xs sm:text-sm font-semibold whitespace-nowrap">{node.label}</span>
+                <span className="absolute top-full mt-1 text-xs sm:text-sm font-semibold whitespace-nowrap">{node.label}</span>
               </div>
             </motion.div>
           ))}
