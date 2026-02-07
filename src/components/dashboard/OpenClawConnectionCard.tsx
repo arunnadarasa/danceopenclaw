@@ -229,13 +229,38 @@ export const OpenClawConnectionCard = () => {
         )}
 
         <a
-          href="https://openclaw.ai"
+          href="https://docs.openclaw.ai/install/railway"
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
         >
           OpenClaw setup docs <ExternalLink className="h-3 w-3" />
         </a>
+
+        {/* Quick Setup Tips */}
+        <div className="rounded-lg border border-border bg-secondary/50 p-4 space-y-3">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Quick Setup Tips</p>
+          <div className="space-y-2">
+            <div className="flex items-start gap-2">
+              <span className="mt-0.5 text-xs font-medium text-primary">Hosting</span>
+              <p className="text-xs text-muted-foreground">
+                We recommend{" "}
+                <a href="https://railway.com" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Railway</a>{" "}
+                (Hobby Plan, $5/month). Set a <strong className="text-foreground">$5 hard usage limit</strong> and a{" "}
+                <strong className="text-foreground">$3 custom email alert</strong> to control costs.
+              </p>
+            </div>
+            <div className="flex items-start gap-2">
+              <span className="mt-0.5 text-xs font-medium text-primary">AI Key</span>
+              <p className="text-xs text-muted-foreground">
+                Use{" "}
+                <a href="https://openrouter.ai" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">OpenRouter</a>{" "}
+                for your AI model key (set as <code className="rounded bg-muted px-1 text-[11px]">OPENROUTER_API_KEY</code> in Railway).
+                Sign up and grab a free key to get started.
+              </p>
+            </div>
+          </div>
+        </div>
       </CardContent>
     </Card>
   );
