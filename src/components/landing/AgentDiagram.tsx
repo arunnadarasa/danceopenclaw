@@ -77,25 +77,28 @@ export const AgentDiagram = () => {
 
           {/* Nodes */}
           {nodes.map((node, i) => (
-            <motion.div
+            <div
               key={node.label}
               className={`absolute ${node.className}`}
               style={{ left: node.x, top: node.y }}
-              initial={{ scale: 0, opacity: 0 }}
-              whileInView={{ scale: 1, opacity: 1 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.5, delay: i * 0.2 }}
             >
-              <div className="relative flex flex-col items-center">
-                <div
-                  className="flex h-14 w-14 sm:h-16 sm:w-16 items-center justify-center rounded-2xl border border-border bg-card shadow-lg animate-float"
-                  style={{ animationDelay: `${i * 2}s` }}
-                >
-                  <span className="text-xl sm:text-2xl">{node.emoji}</span>
+              <motion.div
+                initial={{ scale: 0, opacity: 0 }}
+                whileInView={{ scale: 1, opacity: 1 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.5, delay: i * 0.2 }}
+              >
+                <div className="relative flex flex-col items-center">
+                  <div
+                    className="flex h-14 w-14 sm:h-16 sm:w-16 items-center justify-center rounded-2xl border border-border bg-card shadow-lg animate-float"
+                    style={{ animationDelay: `${i * 2}s` }}
+                  >
+                    <span className="text-xl sm:text-2xl">{node.emoji}</span>
+                  </div>
+                  <span className="absolute top-full mt-1 text-xs sm:text-sm font-semibold whitespace-nowrap">{node.label}</span>
                 </div>
-                <span className="absolute top-full mt-1 text-xs sm:text-sm font-semibold whitespace-nowrap">{node.label}</span>
-              </div>
-            </motion.div>
+              </motion.div>
+            </div>
           ))}
         </div>
       </div>
