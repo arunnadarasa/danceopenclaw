@@ -105,7 +105,7 @@ export const OpenClawConnectionCard = () => {
     setDisconnecting(true);
     try {
       const { error } = await supabase.functions.invoke("openclaw-register", {
-        method: "DELETE",
+        body: { action: "disconnect" },
       });
       if (error) {
         throw new Error(error.message);

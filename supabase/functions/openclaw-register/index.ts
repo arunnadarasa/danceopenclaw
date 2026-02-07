@@ -5,6 +5,7 @@ const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+  "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
 };
 
 /** Try multiple health-check endpoints and return diagnostic info */
@@ -93,8 +94,27 @@ serve(async (req) => {
       );
     }
 
-    // Handle POST — register / update connection
-    let { webhookUrl, webhookToken } = await req.json();
+    // Handle POST — register / update connection (or disconnect via action)
+    const body = await req.json();
+
+    // POST with action: "disconnect" as fallback for DELETE
+    if (body.action === "disconnect") {
+      const serviceClient = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+      );
+      await serviceClient
+        .from("openclaw_connections")
+        .delete()
+        .eq("user_id", userId);
+
+      return new Response(
+        JSON.stringify({ disconnected: true }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    let { webhookUrl, webhookToken } = body;
 
     if (!webhookUrl || !webhookToken) {
       return new Response(
