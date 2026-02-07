@@ -52,9 +52,13 @@ export const OpenClawConnectionCard = () => {
       return;
     }
     setLoading(true);
+    let normalizedUrl = webhookUrl.trim();
+    if (!/^https?:\/\//i.test(normalizedUrl)) {
+      normalizedUrl = `https://${normalizedUrl}`;
+    }
     try {
       const { data, error } = await supabase.functions.invoke("openclaw-register", {
-        body: { webhookUrl, webhookToken },
+        body: { webhookUrl: normalizedUrl, webhookToken },
       });
       if (error) {
         let msg = error.message;
@@ -113,7 +117,7 @@ export const OpenClawConnectionCard = () => {
         <div className="space-y-2">
           <label className="text-sm font-medium">Webhook URL</label>
           <Input
-            placeholder="https://your-server:18789"
+            placeholder="https://your-server.up.railway.app"
             value={webhookUrl}
             onChange={(e) => setWebhookUrl(e.target.value)}
           />
