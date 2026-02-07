@@ -116,7 +116,7 @@ serve(async (req) => {
           deliver: false,
           timeoutSeconds: 120,
         }),
-        signal: AbortSignal.timeout(15000),
+        signal: AbortSignal.timeout(30000),
       });
 
       // Update task status to running
@@ -161,7 +161,7 @@ serve(async (req) => {
         .update({
           status: "failed",
           error_message: isTimeout
-            ? `Request to OpenClaw timed out after 15s. Your server may be down or unresponsive.`
+            ? `Request to OpenClaw timed out after 30s. Your server may be down or unresponsive.`
             : `Failed to reach OpenClaw: ${msg}`,
         })
         .eq("id", taskId);

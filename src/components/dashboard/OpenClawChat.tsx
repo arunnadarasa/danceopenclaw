@@ -2,7 +2,6 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { MessageCircle, X, Send, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -21,6 +20,12 @@ export const OpenClawChat = () => {
   const [pendingTaskIds, setPendingTaskIds] = useState<Set<string>>(new Set());
   const [sending, setSending] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const pendingRef = useRef<Set<string>>(pendingTaskIds);
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    pendingRef.current = pendingTaskIds;
+  }, [pendingTaskIds]);
 
   const scrollToBottom = useCallback(() => {
     requestAnimationFrame(() => {
@@ -34,9 +39,53 @@ export const OpenClawChat = () => {
     scrollToBottom();
   }, [messages, open, scrollToBottom]);
 
-  // Realtime subscription for agent task updates
+  // Helper to process a completed/failed task
+  const processTaskUpdate = useCallback(
+    (task: { id: string; status: string; response: unknown; error_message: string | null }) => {
+      if (!pendingRef.current.has(task.id)) return;
+
+      if (task.status === "completed") {
+        let content = "Task completed.";
+        if (task.response) {
+          const res = task.response as Record<string, unknown>;
+          content =
+            (res.result as string) ||
+            (res.response as string) ||
+            (res.output as string) ||
+            JSON.stringify(task.response);
+        }
+        setMessages((prev) => [
+          ...prev,
+          { role: "agent", content, timestamp: new Date(), taskId: task.id },
+        ]);
+        setPendingTaskIds((prev) => {
+          const next = new Set(prev);
+          next.delete(task.id);
+          return next;
+        });
+      } else if (task.status === "failed") {
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "agent",
+            content: task.error_message || "Something went wrong.",
+            timestamp: new Date(),
+            taskId: task.id,
+          },
+        ]);
+        setPendingTaskIds((prev) => {
+          const next = new Set(prev);
+          next.delete(task.id);
+          return next;
+        });
+      }
+    },
+    []
+  );
+
+  // Stable Realtime subscription — depends only on user
   useEffect(() => {
-    if (!user || pendingTaskIds.size === 0) return;
+    if (!user) return;
 
     const channel = supabase
       .channel("chat-task-updates")
@@ -55,45 +104,7 @@ export const OpenClawChat = () => {
             response: unknown;
             error_message: string | null;
           };
-
-          if (!pendingTaskIds.has(task.id)) return;
-
-          if (task.status === "completed") {
-            let content = "Task completed.";
-            if (task.response) {
-              const res = task.response as Record<string, unknown>;
-              content =
-                (res.result as string) ||
-                (res.response as string) ||
-                (res.output as string) ||
-                JSON.stringify(task.response);
-            }
-
-            setMessages((prev) => [
-              ...prev,
-              { role: "agent", content, timestamp: new Date(), taskId: task.id },
-            ]);
-            setPendingTaskIds((prev) => {
-              const next = new Set(prev);
-              next.delete(task.id);
-              return next;
-            });
-          } else if (task.status === "failed") {
-            setMessages((prev) => [
-              ...prev,
-              {
-                role: "agent",
-                content: task.error_message || "Something went wrong.",
-                timestamp: new Date(),
-                taskId: task.id,
-              },
-            ]);
-            setPendingTaskIds((prev) => {
-              const next = new Set(prev);
-              next.delete(task.id);
-              return next;
-            });
-          }
+          processTaskUpdate(task);
         }
       )
       .subscribe();
@@ -101,7 +112,32 @@ export const OpenClawChat = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user, pendingTaskIds]);
+  }, [user, processTaskUpdate]);
+
+  // Polling fallback — runs when there are pending tasks
+  useEffect(() => {
+    if (pendingTaskIds.size === 0) return;
+
+    const interval = setInterval(async () => {
+      const ids = Array.from(pendingRef.current);
+      if (ids.length === 0) return;
+
+      const { data } = await supabase
+        .from("agent_tasks")
+        .select("id, status, response, error_message")
+        .in("id", ids);
+
+      if (data) {
+        for (const task of data) {
+          if (task.status === "completed" || task.status === "failed") {
+            processTaskUpdate(task);
+          }
+        }
+      }
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [pendingTaskIds.size > 0, processTaskUpdate]);
 
   const handleSend = async () => {
     const trimmed = input.trim();
@@ -121,9 +157,15 @@ export const OpenClawChat = () => {
       });
 
       if (error) {
+        // Show proxy error immediately in chat
+        let errorMsg = error.message;
+        try {
+          const body = JSON.parse(error.message);
+          if (body?.error) errorMsg = body.error;
+        } catch {}
         setMessages((prev) => [
           ...prev,
-          { role: "agent", content: `Error: ${error.message}`, timestamp: new Date() },
+          { role: "agent", content: `Error: ${errorMsg}`, timestamp: new Date() },
         ]);
       } else if (data?.taskId) {
         setPendingTaskIds((prev) => new Set(prev).add(data.taskId));
