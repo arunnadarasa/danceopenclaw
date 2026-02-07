@@ -1,48 +1,36 @@
 
 
-## Add a Floating Chat Button with OpenClaw Agent
+## Update Docs Links and Add OpenRouter Setup Guidance
 
 ### Overview
-Add a floating chat button (bottom-right corner) across all authenticated dashboard pages that opens a slide-up chat panel. Users can have a conversation with their OpenClaw agent in a familiar chat UI, with messages displayed in real-time as they come back from the agent.
-
-The chat reuses the existing `openclaw-proxy` backend function and `agent_tasks` table, plus realtime subscriptions to show responses as they arrive.
+Update all "OpenClaw setup docs" links to point to the correct Railway install guide, and add clear setup tips recommending Railway for hosting and OpenRouter (not Mistral) for the AI API key.
 
 ---
 
-### What You Will See
+### Changes
 
-- A circular chat button (with a claw/message icon) pinned to the bottom-right of every dashboard page
-- Clicking it opens a chat panel (roughly 400x500px) with:
-  - A header showing "Chat with OpenClaw" and a close button
-  - A scrollable message area with user messages on the right and agent responses on the left
-  - A text input + send button at the bottom
-- Messages are sent via the existing `openclaw-proxy` function
-- Agent responses update in real-time via the existing realtime subscription on `agent_tasks`
-- The chat panel can be closed/reopened without losing the conversation
-- Works on both desktop and mobile
+**1. Fix docs link in `OpenClawConnectionCard.tsx` (line 232)**
+- Change `href="https://openclaw.ai"` to `href="https://docs.openclaw.ai/install/railway"`
 
----
+**2. Add a "Quick Setup Tips" section in `OpenClawConnectionCard.tsx`**
+Below the docs link, add a compact tips block (always visible, no collapsible needed) with:
+- **Hosting:** "We recommend Railway (Hobby Plan, $5/month). Set a $5 hard usage limit and a $3 custom email alert to control costs."  Link to railway.com.
+- **AI API Key:** "Use OpenRouter for your AI model key (set as `OPENROUTER_API_KEY` in Railway). Sign up and grab a free key to get started."  Link to openrouter.ai.
 
-### Technical Details
+**3. Fix docs link in `SetupGuide.tsx` (line 27)**
+- Change `url: "https://openclaw.ai"` to `url: "https://docs.openclaw.ai/install/railway"`
+- Update description to mention OpenRouter instead of generic "enable webhooks" language:
+  "Deploy OpenClaw on Railway, add your OpenRouter API key, then paste your webhook URL and token into the dashboard."
 
-**New file: `src/components/dashboard/OpenClawChat.tsx`**
-- A floating chat widget component containing:
-  - A toggle button (fixed bottom-right, z-50) with a `MessageCircle` icon from lucide-react
-  - An expandable chat panel using framer-motion for smooth open/close animation
-  - Chat message state stored locally (array of `{ role: "user" | "agent", content: string, timestamp: Date, taskId?: string }`)
-  - Sends messages via `supabase.functions.invoke("openclaw-proxy", { body: { taskType: "chat", message } })`
-  - Subscribes to realtime changes on `agent_tasks` table to detect when tasks complete, then extracts the response text and appends it as an agent message
-  - Auto-scrolls to bottom on new messages
-  - Shows a typing indicator when a task is in "pending" or "running" state
+**4. Replace the placeholder Docs page (`Docs.tsx`)**
+Turn the "coming soon" page into a simple setup guide with three sections:
+- **Deploy on Railway** -- Step-by-step: sign up, deploy the ClawdBot template, set Hobby Plan ($5/mo), configure $5 hard limit + $3 email alert. Link to docs.openclaw.ai/install/railway.
+- **Get an AI API Key** -- Sign up at OpenRouter (openrouter.ai), create an API key, add it as `OPENROUTER_API_KEY` in your Railway environment variables.
+- **Connect to Dashboard** -- Go to your Dashboard Settings, paste your Railway public URL and webhook token, click Connect. Link back to /dashboard.
+- A prominent button linking to the full documentation at `https://docs.openclaw.ai/install/railway`.
 
-**Modified file: `src/components/dashboard/DashboardLayout.tsx`**
-- Import and render `<OpenClawChat />` alongside the existing layout so it appears on all dashboard pages
-
-**No database changes needed** -- the chat uses the existing `agent_tasks` table and `openclaw-proxy` function.
-
-**No new edge functions needed** -- all communication goes through the existing proxy.
-
-### Files
-- **Create**: `src/components/dashboard/OpenClawChat.tsx` -- floating chat widget
-- **Modify**: `src/components/dashboard/DashboardLayout.tsx` -- add the chat component to the layout
+### Files Modified
+- `src/components/dashboard/OpenClawConnectionCard.tsx` -- fix link, add setup tips
+- `src/components/landing/SetupGuide.tsx` -- fix link, update description
+- `src/pages/Docs.tsx` -- replace placeholder with structured setup guide
 
