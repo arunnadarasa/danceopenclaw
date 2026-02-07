@@ -246,8 +246,8 @@ export const OpenClawConnectionCard = () => {
               <p className="text-xs text-muted-foreground">
                 We recommend{" "}
                 <a href="https://railway.com" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Railway</a>{" "}
-                (Hobby Plan, $5/month). Set a <strong className="text-foreground">$5 hard usage limit</strong> and a{" "}
-                <strong className="text-foreground">$3 custom email alert</strong> to control costs.
+                (Hobby Plan, $5/month). Set a <strong className="text-foreground">$10 hard usage limit</strong> and a{" "}
+                <strong className="text-foreground">$5 custom email alert</strong> to control costs.
               </p>
             </div>
             <div className="flex items-start gap-2">

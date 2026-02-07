@@ -35,10 +35,10 @@ const Docs = () => (
             Switch to the <strong className="text-foreground">Hobby Plan ($5/month)</strong>.
           </li>
           <li>
-            Set a <strong className="text-foreground">$5 hard usage limit</strong> under Settings → Usage so you never get surprise bills.
+            Set a <strong className="text-foreground">$10 hard usage limit</strong> under Settings → Usage so you never get surprise bills.
           </li>
           <li>
-            Add a <strong className="text-foreground">$3 custom email alert</strong> to get notified before you hit the limit.
+            Add a <strong className="text-foreground">$5 custom email alert</strong> to get notified before you hit the limit.
           </li>
         </ul>
         <a
