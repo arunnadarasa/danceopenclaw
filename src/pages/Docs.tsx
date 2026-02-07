@@ -1,7 +1,7 @@
 import { ExternalLink, Server, Key, Plug } from "lucide-react";
 import { Link } from "react-router-dom";
 
-const DOCS_URL = "https://docs.openclaw.ai/install/railway";
+const DOCS_URL = "https://www.digitalocean.com/community/tutorials/how-to-run-openclaw";
 
 const Docs = () => (
   <div className="min-h-screen bg-background text-foreground">
@@ -15,30 +15,30 @@ const Docs = () => (
         </p>
       </div>
 
-      {/* Step 1 — Deploy on Railway */}
+      {/* Step 1 — Deploy on DigitalOcean */}
       <section className="rounded-2xl border border-border bg-card p-6 space-y-3">
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
             <Server className="h-5 w-5" />
           </div>
-          <h2 className="font-display text-xl font-semibold">1. Deploy on Railway</h2>
+          <h2 className="font-display text-xl font-semibold">1. Deploy on DigitalOcean</h2>
         </div>
         <ul className="list-disc pl-5 space-y-1.5 text-sm text-muted-foreground">
           <li>
-            Sign up at{" "}
-            <a href="https://railway.com" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
-              railway.com
-            </a>{" "}
-            and deploy the ClawdBot template.
+            Go to the{" "}
+            <a href="https://marketplace.digitalocean.com" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+              DigitalOcean Marketplace
+            </a>
+            , search <strong className="text-foreground">"OpenClaw"</strong>, and launch the 1-Click Droplet.
           </li>
           <li>
-            Switch to the <strong className="text-foreground">Hobby Plan ($5/month)</strong>.
+            Select a <strong className="text-foreground">4 GB RAM Droplet</strong> (~$24/month recommended).
           </li>
           <li>
-            Set a <strong className="text-foreground">$10 hard usage limit</strong> under Settings → Usage so you never get surprise bills.
+            SSH into your Droplet and run the <strong className="text-foreground">setup wizard</strong> when prompted.
           </li>
           <li>
-            Add a <strong className="text-foreground">$5 custom email alert</strong> to get notified before you hit the limit.
+            The 1-Click deploy includes <strong className="text-foreground">firewall rules, Docker isolation, and non-root execution</strong> out of the box.
           </li>
         </ul>
         <a
@@ -47,7 +47,7 @@ const Docs = () => (
           rel="noopener noreferrer"
           className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
         >
-          Full Railway install guide <ExternalLink className="h-3 w-3" />
+          Full DigitalOcean setup guide <ExternalLink className="h-3 w-3" />
         </a>
       </section>
 
@@ -68,8 +68,8 @@ const Docs = () => (
             and create an API key.
           </li>
           <li>
-            In your Railway project, go to <strong className="text-foreground">Variables</strong> and add{" "}
-            <code className="rounded bg-muted px-1.5 py-0.5 text-xs">OPENROUTER_API_KEY</code> with the key you just created.
+            SSH into your Droplet and enter your API key when prompted during setup, or add{" "}
+            <code className="rounded bg-muted px-1.5 py-0.5 text-xs">OPENROUTER_API_KEY</code> to your environment variables.
           </li>
         </ul>
       </section>
@@ -90,7 +90,7 @@ const Docs = () => (
             </Link>{" "}
             and find the OpenClaw Connection card.
           </li>
-          <li>Paste your Railway public URL and webhook token.</li>
+          <li>Paste your Droplet IP address and webhook token.</li>
           <li>
             Click <strong className="text-foreground">Connect</strong> — you're live!
           </li>
