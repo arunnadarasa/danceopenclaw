@@ -1,9 +1,9 @@
 import { motion } from "framer-motion";
 
 const nodes = [
-  { label: "Dancer Agent", emoji: "💃", x: "50%", y: "18%" },
-  { label: "Fan Agent", emoji: "🎤", x: "20%", y: "77%" },
-  { label: "Organiser Agent", emoji: "🎪", x: "80%", y: "77%" },
+  { label: "Dancer Agent", emoji: "💃", x: "50%", y: "19%" },
+  { label: "Fan Agent", emoji: "🎤", x: "20%", y: "77.5%" },
+  { label: "Organiser Agent", emoji: "🎪", x: "80%", y: "77.5%" },
 ];
 
 export const AgentDiagram = () => {
@@ -21,7 +21,7 @@ export const AgentDiagram = () => {
         </div>
 
         {/* Diagram */}
-        <div className="relative mx-auto mt-16 h-[420px] max-w-md sm:max-w-lg">
+        <div className="relative mx-auto mt-16 aspect-square max-w-sm sm:max-w-md">
           {/* Connection lines */}
           <svg className="absolute inset-0 h-full w-full" viewBox="0 0 400 400" preserveAspectRatio="xMidYMid meet">
             <motion.line
