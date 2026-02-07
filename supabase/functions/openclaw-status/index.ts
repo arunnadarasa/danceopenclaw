@@ -7,6 +7,46 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+/** Try multiple health-check endpoints and return diagnostic info */
+async function multiPathPing(
+  baseUrl: string,
+  token: string
+): Promise<{ reachable: boolean; pingDetail: string }> {
+  const endpoints = [
+    { path: "/hooks/wake", method: "POST", body: JSON.stringify({ text: "Dance OpenClaw health check", mode: "now" }) },
+    { path: "/webhook", method: "POST", body: JSON.stringify({ text: "ping" }) },
+    { path: "/", method: "GET", body: undefined },
+  ];
+
+  const results: string[] = [];
+  for (const ep of endpoints) {
+    try {
+      const res = await fetch(`${baseUrl}${ep.path}`, {
+        method: ep.method,
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        ...(ep.body ? { body: ep.body } : {}),
+        signal: AbortSignal.timeout(10000),
+      });
+      if (res.ok || res.status === 202) {
+        results.push(`${ep.path} -> ${res.status} OK`);
+        return { reachable: true, pingDetail: results.join("; ") };
+      }
+      const snippet = await res.text().catch(() => "");
+      const shortSnippet = snippet.slice(0, 120);
+      results.push(`${ep.path} -> ${res.status} ${res.statusText}${shortSnippet ? ` (${shortSnippet})` : ""}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      const isTimeout = msg.includes("timed out") || msg.includes("timeout") || msg.includes("AbortError");
+      results.push(`${ep.path} -> ${isTimeout ? "timeout after 10s" : msg}`);
+    }
+  }
+
+  return { reachable: false, pingDetail: results.join("; ") };
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -50,29 +90,14 @@ serve(async (req) => {
       );
     }
 
-    // Normalize URL in case old record was saved without protocol
+    // Normalize URL
     let webhookUrl = (conn.webhook_url || "").trim();
     if (!/^https?:\/\//i.test(webhookUrl)) {
       webhookUrl = `https://${webhookUrl}`;
     }
 
-    // Ping the OpenClaw instance
-    let reachable = false;
-    try {
-      const pingRes = await fetch(`${webhookUrl}/hooks/wake`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${conn.webhook_token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ text: "Dance OpenClaw health check", mode: "now" }),
-        signal: AbortSignal.timeout(10000),
-      });
-      reachable = pingRes.ok || pingRes.status === 202;
-    } catch {
-      // Not reachable
-    }
-
+    // Multi-path ping
+    const { reachable, pingDetail } = await multiPathPing(webhookUrl, conn.webhook_token);
     const newStatus = reachable ? "connected" : "disconnected";
 
     // Update status using service role
@@ -95,6 +120,7 @@ serve(async (req) => {
         status: newStatus,
         last_ping_at: reachable ? new Date().toISOString() : conn.last_ping_at,
         webhook_url: conn.webhook_url,
+        ping_detail: pingDetail,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

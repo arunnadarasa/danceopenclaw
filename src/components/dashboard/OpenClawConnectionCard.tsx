@@ -3,7 +3,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Plug, Unplug, RefreshCw, ExternalLink } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Plug, Unplug, RefreshCw, ExternalLink, Trash2, AlertTriangle, Info } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
@@ -14,8 +15,10 @@ export const OpenClawConnectionCard = () => {
   const [webhookToken, setWebhookToken] = useState("");
   const [status, setStatus] = useState<string>("not_configured");
   const [lastPing, setLastPing] = useState<string | null>(null);
+  const [pingDetail, setPingDetail] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
 
   useEffect(() => {
     if (session) fetchStatus();
@@ -37,7 +40,18 @@ export const OpenClawConnectionCard = () => {
       } else if (data) {
         setStatus(data.status || "not_configured");
         setLastPing(data.last_ping_at);
+        setPingDetail(data.ping_detail || null);
         if (data.webhook_url) setWebhookUrl(data.webhook_url);
+
+        // Show toast with diagnostic info on test
+        if (data.ping_detail && data.status !== "connected") {
+          toast.error(`Connection test failed`, {
+            description: data.ping_detail,
+            duration: 8000,
+          });
+        } else if (data.status === "connected") {
+          toast.success("OpenClaw is reachable!");
+        }
       }
     } catch {
       // ignore
@@ -70,15 +84,42 @@ export const OpenClawConnectionCard = () => {
       }
       setStatus(data.connection.status);
       setLastPing(data.connection.last_ping_at);
-      toast.success(
-        data.connection.status === "connected"
-          ? "OpenClaw connected successfully!"
-          : "Connection saved. Instance not reachable yet — status is pending."
-      );
+      setPingDetail(data.connection.ping_detail || null);
+
+      if (data.connection.status === "connected") {
+        toast.success("OpenClaw connected successfully!");
+      } else {
+        toast.warning("Connection saved but instance not reachable.", {
+          description: data.connection.ping_detail || "Check your server logs.",
+          duration: 8000,
+        });
+      }
     } catch (e: any) {
       toast.error(e.message || "Failed to register connection");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDisconnect = async () => {
+    setDisconnecting(true);
+    try {
+      const { error } = await supabase.functions.invoke("openclaw-register", {
+        method: "DELETE",
+      });
+      if (error) {
+        throw new Error(error.message);
+      }
+      setStatus("not_configured");
+      setWebhookUrl("");
+      setWebhookToken("");
+      setLastPing(null);
+      setPingDetail(null);
+      toast.success("OpenClaw disconnected. You can reconfigure anytime.");
+    } catch (e: any) {
+      toast.error(e.message || "Failed to disconnect");
+    } finally {
+      setDisconnecting(false);
     }
   };
 
@@ -87,10 +128,16 @@ export const OpenClawConnectionCard = () => {
       ? "bg-success"
       : status === "pending"
       ? "bg-warning"
-      : "bg-destructive";
+      : status === "disconnected"
+      ? "bg-destructive"
+      : "bg-muted-foreground";
 
   const statusLabel =
-    status === "not_configured" ? "Not Configured" : status.charAt(0).toUpperCase() + status.slice(1);
+    status === "not_configured"
+      ? "Not Configured"
+      : status.charAt(0).toUpperCase() + status.slice(1);
+
+  const isConfigured = status !== "not_configured";
 
   return (
     <Card>
@@ -114,6 +161,21 @@ export const OpenClawConnectionCard = () => {
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* Diagnostic alert */}
+        {pingDetail && (status === "pending" || status === "disconnected") && (
+          <Alert variant="destructive" className="border-destructive/50">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription className="space-y-1">
+              <p className="font-medium">Connection issue detected</p>
+              <p className="text-xs font-mono break-all">{pingDetail}</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                This usually means your server is crashing on startup or the endpoint path is incorrect.
+                Check your Railway/server logs and environment variables (API keys, tokens).
+              </p>
+            </AlertDescription>
+          </Alert>
+        )}
+
         <div className="space-y-2">
           <label className="text-sm font-medium">Webhook URL</label>
           <Input
@@ -121,6 +183,10 @@ export const OpenClawConnectionCard = () => {
             value={webhookUrl}
             onChange={(e) => setWebhookUrl(e.target.value)}
           />
+          <p className="text-xs text-muted-foreground flex items-start gap-1">
+            <Info className="h-3 w-3 mt-0.5 shrink-0" />
+            The base URL of your OpenClaw instance (e.g. <code className="text-xs">https://clawdbot-production-xxxx.up.railway.app</code>). Do not include path suffixes like /hooks/wake.
+          </p>
         </div>
         <div className="space-y-2">
           <label className="text-sm font-medium">Webhook Token</label>
@@ -136,10 +202,24 @@ export const OpenClawConnectionCard = () => {
           <Button onClick={handleConnect} disabled={loading}>
             {loading ? "Connecting..." : "Connect"}
           </Button>
-          <Button variant="outline" onClick={fetchStatus} disabled={checking}>
-            <RefreshCw className={`mr-1 h-4 w-4 ${checking ? "animate-spin" : ""}`} />
-            Test
-          </Button>
+          {isConfigured && (
+            <>
+              <Button variant="outline" onClick={fetchStatus} disabled={checking}>
+                <RefreshCw className={`mr-1 h-4 w-4 ${checking ? "animate-spin" : ""}`} />
+                Test
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleDisconnect}
+                disabled={disconnecting}
+                className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                title="Disconnect"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </>
+          )}
         </div>
 
         {lastPing && (

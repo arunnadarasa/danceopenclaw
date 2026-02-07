@@ -59,6 +59,12 @@ serve(async (req) => {
       );
     }
 
+    // Normalize webhook URL
+    let webhookUrl = (conn.webhook_url || "").trim();
+    if (!/^https?:\/\//i.test(webhookUrl)) {
+      webhookUrl = `https://${webhookUrl}`;
+    }
+
     // Get user's agent
     const { data: agent } = await supabase
       .from("agents")
@@ -97,7 +103,7 @@ serve(async (req) => {
 
     // Send to OpenClaw agent
     try {
-      const openclawRes = await fetch(`${conn.webhook_url}/hooks/agent`, {
+      const openclawRes = await fetch(`${webhookUrl}/hooks/agent`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${conn.webhook_token}`,
@@ -138,20 +144,25 @@ serve(async (req) => {
         }
       } else {
         const errorText = await openclawRes.text();
+        const shortError = errorText.slice(0, 200);
         await serviceClient
           .from("agent_tasks")
           .update({
             status: "failed",
-            error_message: `OpenClaw returned ${openclawRes.status}: ${errorText}`,
+            error_message: `OpenClaw returned ${openclawRes.status} ${openclawRes.statusText}: ${shortError}`,
           })
           .eq("id", taskId);
       }
     } catch (fetchErr) {
+      const msg = fetchErr instanceof Error ? fetchErr.message : "Failed to reach OpenClaw";
+      const isTimeout = msg.includes("timed out") || msg.includes("timeout") || msg.includes("AbortError");
       await serviceClient
         .from("agent_tasks")
         .update({
           status: "failed",
-          error_message: fetchErr instanceof Error ? fetchErr.message : "Failed to reach OpenClaw",
+          error_message: isTimeout
+            ? `Request to OpenClaw timed out after 15s. Your server may be down or unresponsive.`
+            : `Failed to reach OpenClaw: ${msg}`,
         })
         .eq("id", taskId);
     }
