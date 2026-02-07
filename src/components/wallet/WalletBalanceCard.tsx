@@ -5,22 +5,10 @@ import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import type { WalletInfo, BalanceInfo } from "@/hooks/useAgentWallet";
 
-const CHAIN_COLORS: Record<string, string> = {
-  base_sepolia: "bg-[hsl(var(--chain-eth))]",
-  base: "bg-[hsl(var(--chain-eth))]",
-  solana_devnet: "bg-[hsl(var(--chain-sol))]",
-  solana: "bg-[hsl(var(--chain-sol))]",
-  story_aeneid: "bg-[hsl(var(--chain-story))]",
-  story: "bg-[hsl(var(--chain-story))]",
-};
-
-const CHAIN_ICONS: Record<string, string> = {
-  base_sepolia: "Ξ",
-  base: "Ξ",
-  solana_devnet: "◎",
-  solana: "◎",
-  story_aeneid: "📖",
-  story: "📖",
+const FAMILY_META: Record<string, { icon: string; colorClass: string; label: string }> = {
+  base: { icon: "Ξ", colorClass: "bg-[hsl(var(--chain-eth))]", label: "Base" },
+  solana: { icon: "◎", colorClass: "bg-[hsl(var(--chain-sol))]", label: "Solana" },
+  story: { icon: "📖", colorClass: "bg-[hsl(var(--chain-story))]", label: "Story" },
 };
 
 const EXPLORER_URLS: Record<string, string> = {
@@ -32,21 +20,67 @@ const EXPLORER_URLS: Record<string, string> = {
   story: "https://storyscan.xyz/address/",
 };
 
+export interface WalletGroup {
+  family: string;
+  address: string;
+  testnet?: WalletInfo;
+  mainnet?: WalletInfo;
+}
+
 interface WalletBalanceCardProps {
-  wallet: WalletInfo;
-  balance?: BalanceInfo;
+  group: WalletGroup;
+  balances: Record<string, BalanceInfo>;
   balanceLoading?: boolean;
 }
 
-export const WalletBalanceCard = ({ wallet, balance, balanceLoading }: WalletBalanceCardProps) => {
-  const colorClass = CHAIN_COLORS[wallet.chain] || "bg-muted";
-  const icon = CHAIN_ICONS[wallet.chain] || "💰";
-  const explorerBase = EXPLORER_URLS[wallet.chain];
-  const shortAddress = `${wallet.address.slice(0, 6)}…${wallet.address.slice(-4)}`;
+export const WalletBalanceCard = ({ group, balances, balanceLoading }: WalletBalanceCardProps) => {
+  const meta = FAMILY_META[group.family] || { icon: "💰", colorClass: "bg-muted", label: group.family };
+  const shortAddress = `${group.address.slice(0, 6)}…${group.address.slice(-4)}`;
 
   const copyAddress = () => {
-    navigator.clipboard.writeText(wallet.address);
+    navigator.clipboard.writeText(group.address);
     toast({ title: "Address copied", description: shortAddress });
+  };
+
+  // Determine which explorer to link (prefer mainnet)
+  const mainChain = group.mainnet?.chain || group.testnet?.chain || "";
+  const explorerBase = EXPLORER_URLS[mainChain];
+
+  const renderNetworkBalance = (wallet: WalletInfo | undefined, label: string) => {
+    if (!wallet) return null;
+    const bal = balances[wallet.chain];
+
+    return (
+      <div className="flex items-center justify-between rounded-lg bg-muted/40 px-3 py-2">
+        <div className="flex items-center gap-2">
+          <Badge
+            variant={wallet.network === "mainnet" ? "default" : "secondary"}
+            className="text-[10px] px-1.5 py-0"
+          >
+            {wallet.network}
+          </Badge>
+          <span className="text-xs text-muted-foreground">{label}</span>
+        </div>
+        <div className="text-right">
+          {balanceLoading ? (
+            <div className="h-4 w-16 animate-pulse rounded bg-muted" />
+          ) : bal?.error ? (
+            <span className="text-xs text-destructive">Error</span>
+          ) : (
+            <>
+              <p className="font-display text-sm font-semibold text-foreground tabular-nums">
+                {bal?.native_balance ?? "—"}
+              </p>
+              {bal?.token_balances?.map((t) => (
+                <p key={t.symbol} className="text-xs text-muted-foreground">
+                  {t.balance} {t.symbol}
+                </p>
+              ))}
+            </>
+          )}
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -55,41 +89,15 @@ export const WalletBalanceCard = ({ wallet, balance, balanceLoading }: WalletBal
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
-            <div className={`flex h-10 w-10 items-center justify-center rounded-xl text-lg ${colorClass} text-white`}>
-              {icon}
+            <div className={`flex h-10 w-10 items-center justify-center rounded-xl text-lg ${meta.colorClass} text-white`}>
+              {meta.icon}
             </div>
-            <div>
-              <p className="font-display font-semibold text-foreground">{wallet.label}</p>
-              <Badge
-                variant={wallet.network === "mainnet" ? "default" : "secondary"}
-                className="text-[10px] px-1.5 py-0"
-              >
-                {wallet.network}
-              </Badge>
-            </div>
+            <p className="font-display text-lg font-semibold text-foreground">{meta.label}</p>
           </div>
         </div>
 
-        {/* Balance */}
-        <div className="mb-4">
-          {balanceLoading ? (
-            <div className="h-8 w-24 animate-pulse rounded bg-muted" />
-          ) : balance?.error ? (
-            <p className="text-sm text-destructive">{balance.error}</p>
-          ) : (
-            <p className="font-display text-2xl font-bold text-foreground tabular-nums">
-              {balance?.native_balance ?? "—"}
-            </p>
-          )}
-          {balance?.token_balances?.map((t) => (
-            <p key={t.symbol} className="text-sm text-muted-foreground mt-1">
-              {t.balance} {t.symbol}
-            </p>
-          ))}
-        </div>
-
         {/* Address row */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 mb-4">
           <code className="flex-1 truncate rounded bg-muted/50 px-2 py-1 text-xs text-muted-foreground font-mono">
             {shortAddress}
           </code>
@@ -98,10 +106,22 @@ export const WalletBalanceCard = ({ wallet, balance, balanceLoading }: WalletBal
           </Button>
           {explorerBase && (
             <Button variant="ghost" size="icon" className="h-7 w-7" asChild>
-              <a href={`${explorerBase}${wallet.address}`} target="_blank" rel="noopener noreferrer">
+              <a href={`${explorerBase}${group.address}`} target="_blank" rel="noopener noreferrer">
                 <ExternalLink className="h-3.5 w-3.5" />
               </a>
             </Button>
+          )}
+        </div>
+
+        {/* Network balances */}
+        <div className="space-y-2">
+          {renderNetworkBalance(
+            group.testnet,
+            group.testnet?.label || "Testnet"
+          )}
+          {renderNetworkBalance(
+            group.mainnet,
+            group.mainnet?.label || "Mainnet"
           )}
         </div>
       </CardContent>
