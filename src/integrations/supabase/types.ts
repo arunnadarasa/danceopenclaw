@@ -14,6 +14,56 @@ export type Database = {
   }
   public: {
     Tables: {
+      agent_payments: {
+        Row: {
+          agent_id: string
+          amount: string
+          created_at: string
+          error_message: string | null
+          id: string
+          network: string
+          recipient_address: string
+          status: string
+          target_url: string
+          tx_hash: string | null
+          wallet_address: string
+        }
+        Insert: {
+          agent_id: string
+          amount: string
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          network: string
+          recipient_address: string
+          status?: string
+          target_url: string
+          tx_hash?: string | null
+          wallet_address: string
+        }
+        Update: {
+          agent_id?: string
+          amount?: string
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          network?: string
+          recipient_address?: string
+          status?: string
+          target_url?: string
+          tx_hash?: string | null
+          wallet_address?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_payments_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       agent_tasks: {
         Row: {
           agent_id: string | null

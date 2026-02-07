@@ -16,6 +16,7 @@ import WalletPage from "./pages/Wallet";
 import Network from "./pages/Network";
 import Docs from "./pages/Docs";
 import SettingsPage from "./pages/Settings";
+import Payments from "./pages/Payments";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -44,6 +45,7 @@ const App = () => (
               <Route path="/shop" element={<Shop />} />
               <Route path="/events" element={<Events />} />
               <Route path="/wallet" element={<WalletPage />} />
+              <Route path="/payments" element={<Payments />} />
               <Route path="/network" element={<Network />} />
               <Route path="/docs" element={<Docs />} />
               <Route path="/settings" element={<SettingsPage />} />
