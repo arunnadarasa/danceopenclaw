@@ -25,15 +25,23 @@ type TokenType = "native" | "usdc";
 
 const USDC_CHAINS = ["base_sepolia", "base"];
 
+// Map chain keys to native token labels
+function getNativeTokenLabel(chain: string): string {
+  if (chain.startsWith("solana")) return "SOL";
+  if (chain.startsWith("story")) return "IP";
+  return "ETH";
+}
+
 export const SendTokenForm = ({ wallets, onSendNative, onSendUsdc, loading }: SendTokenFormProps) => {
   const [chain, setChain] = useState<string>("");
   const [tokenType, setTokenType] = useState<TokenType>("native");
   const [to, setTo] = useState("");
   const [amount, setAmount] = useState("");
 
-  const evmWallets = wallets.filter((w) => w.chain_type === "ethereum");
   const selectedWallet = wallets.find((w) => w.chain === chain);
   const canSendUsdc = chain && USDC_CHAINS.includes(chain);
+  const isSolana = chain.startsWith("solana");
+  const nativeLabel = chain ? getNativeTokenLabel(chain) : "native";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,12 +50,19 @@ export const SendTokenForm = ({ wallets, onSendNative, onSendUsdc, loading }: Se
     try {
       if (tokenType === "usdc") {
         await onSendUsdc(chain, to, amount);
+      } else if (isSolana) {
+        toast({
+          title: "Solana sends not yet supported",
+          description: "Solana native transfers require a serialized transaction. Use the API directly for now.",
+          variant: "destructive",
+        });
+        return;
       } else {
-        // Convert ETH-like amount to wei hex for EVM chains
+        // Convert human-readable amount to wei hex for EVM chains
         const weiValue = "0x" + (BigInt(Math.floor(parseFloat(amount) * 1e18))).toString(16);
         await onSendNative(chain, to, weiValue);
       }
-      toast({ title: "Transaction sent!", description: `Sent ${amount} ${tokenType === "usdc" ? "USDC" : "native"} on ${chain}` });
+      toast({ title: "Transaction sent!", description: `Sent ${amount} ${tokenType === "usdc" ? "USDC" : nativeLabel} on ${chain}` });
       setTo("");
       setAmount("");
     } catch (err) {
@@ -69,7 +84,7 @@ export const SendTokenForm = ({ wallets, onSendNative, onSendUsdc, loading }: Se
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Chain select */}
+          {/* Chain select — show ALL wallets */}
           <div className="space-y-2">
             <Label>Chain</Label>
             <Select value={chain} onValueChange={(v) => { setChain(v); setTokenType("native"); }}>
@@ -77,7 +92,7 @@ export const SendTokenForm = ({ wallets, onSendNative, onSendUsdc, loading }: Se
                 <SelectValue placeholder="Select chain" />
               </SelectTrigger>
               <SelectContent>
-                {evmWallets.map((w) => (
+                {wallets.map((w) => (
                   <SelectItem key={w.chain} value={w.chain}>
                     {w.label} ({w.network})
                   </SelectItem>
@@ -96,7 +111,7 @@ export const SendTokenForm = ({ wallets, onSendNative, onSendUsdc, loading }: Se
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="native">
-                    Native ({selectedWallet?.chain.includes("story") ? "IP" : "ETH"})
+                    Native ({nativeLabel})
                   </SelectItem>
                   {canSendUsdc && <SelectItem value="usdc">USDC</SelectItem>}
                 </SelectContent>
@@ -108,7 +123,7 @@ export const SendTokenForm = ({ wallets, onSendNative, onSendUsdc, loading }: Se
           <div className="space-y-2">
             <Label>Recipient Address</Label>
             <Input
-              placeholder="0x..."
+              placeholder={isSolana ? "So1..." : "0x..."}
               value={to}
               onChange={(e) => setTo(e.target.value)}
               className="font-mono text-sm"
@@ -117,7 +132,7 @@ export const SendTokenForm = ({ wallets, onSendNative, onSendUsdc, loading }: Se
 
           {/* Amount */}
           <div className="space-y-2">
-            <Label>Amount {tokenType === "usdc" ? "(USDC)" : "(native)"}</Label>
+            <Label>Amount {tokenType === "usdc" ? "(USDC)" : `(${nativeLabel})`}</Label>
             <Input
               type="number"
               step="any"
