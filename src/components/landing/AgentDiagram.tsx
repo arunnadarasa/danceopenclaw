@@ -1,9 +1,9 @@
 import { motion } from "framer-motion";
 
 const nodes = [
-  { label: "Dancer Agent", emoji: "💃", x: "50%", y: "10%", color: "primary" },
-  { label: "Fan Agent", emoji: "🎤", x: "15%", y: "75%", color: "accent" },
-  { label: "Organiser Agent", emoji: "🎪", x: "85%", y: "75%", color: "dance-glow" },
+  { label: "Dancer Agent", emoji: "💃", x: "50%", y: "8%" },
+  { label: "Fan Agent", emoji: "🎤", x: "20%", y: "78%" },
+  { label: "Organiser Agent", emoji: "🎪", x: "80%", y: "78%" },
 ];
 
 export const AgentDiagram = () => {
@@ -21,39 +21,59 @@ export const AgentDiagram = () => {
         </div>
 
         {/* Diagram */}
-        <div className="relative mx-auto mt-16 h-[360px] max-w-lg">
+        <div className="relative mx-auto mt-16 h-[420px] max-w-md sm:max-w-lg">
           {/* Connection lines */}
-          <svg className="absolute inset-0 h-full w-full" viewBox="0 0 400 360">
+          <svg className="absolute inset-0 h-full w-full" viewBox="0 0 400 400" preserveAspectRatio="xMidYMid meet">
             <motion.line
-              x1="200" y1="80" x2="70" y2="280"
+              x1="200" y1="75" x2="80" y2="310"
               stroke="hsl(var(--border))" strokeWidth="1.5" strokeDasharray="6 4"
               initial={{ pathLength: 0 }} whileInView={{ pathLength: 1 }}
               viewport={{ once: true }} transition={{ duration: 1, delay: 0.3 }}
             />
             <motion.line
-              x1="200" y1="80" x2="330" y2="280"
+              x1="200" y1="75" x2="320" y2="310"
               stroke="hsl(var(--border))" strokeWidth="1.5" strokeDasharray="6 4"
               initial={{ pathLength: 0 }} whileInView={{ pathLength: 1 }}
               viewport={{ once: true }} transition={{ duration: 1, delay: 0.5 }}
             />
             <motion.line
-              x1="70" y1="280" x2="330" y2="280"
+              x1="80" y1="310" x2="320" y2="310"
               stroke="hsl(var(--border))" strokeWidth="1.5" strokeDasharray="6 4"
               initial={{ pathLength: 0 }} whileInView={{ pathLength: 1 }}
               viewport={{ once: true }} transition={{ duration: 1, delay: 0.7 }}
             />
-          </svg>
 
-          {/* Flow labels */}
-          <div className="absolute left-[18%] top-[42%] -rotate-[35deg] text-[10px] font-medium text-muted-foreground">
-            Tips & Support
-          </div>
-          <div className="absolute right-[14%] top-[42%] rotate-[35deg] text-[10px] font-medium text-muted-foreground">
-            Events & Payouts
-          </div>
-          <div className="absolute bottom-[12%] left-1/2 -translate-x-1/2 text-[10px] font-medium text-muted-foreground">
-            Merch & Tickets
-          </div>
+            {/* Flow labels along edges */}
+            <text
+              x="120" y="195"
+              fill="hsl(var(--muted-foreground))"
+              fontSize="11"
+              fontWeight="500"
+              textAnchor="middle"
+              transform="rotate(-44, 120, 195)"
+            >
+              Tips &amp; Support
+            </text>
+            <text
+              x="280" y="195"
+              fill="hsl(var(--muted-foreground))"
+              fontSize="11"
+              fontWeight="500"
+              textAnchor="middle"
+              transform="rotate(44, 280, 195)"
+            >
+              Events &amp; Payouts
+            </text>
+            <text
+              x="200" y="345"
+              fill="hsl(var(--muted-foreground))"
+              fontSize="11"
+              fontWeight="500"
+              textAnchor="middle"
+            >
+              Merch &amp; Tickets
+            </text>
+          </svg>
 
           {/* Nodes */}
           {nodes.map((node, i) => (
@@ -67,12 +87,13 @@ export const AgentDiagram = () => {
               transition={{ duration: 0.5, delay: i * 0.2 }}
             >
               <div className="flex flex-col items-center gap-2">
-                <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-border bg-card shadow-lg animate-float"
+                <div
+                  className="flex h-14 w-14 sm:h-16 sm:w-16 items-center justify-center rounded-2xl border border-border bg-card shadow-lg animate-float"
                   style={{ animationDelay: `${i * 2}s` }}
                 >
-                  <span className="text-2xl">{node.emoji}</span>
+                  <span className="text-xl sm:text-2xl">{node.emoji}</span>
                 </div>
-                <span className="text-sm font-medium">{node.label}</span>
+                <span className="text-xs sm:text-sm font-semibold whitespace-nowrap">{node.label}</span>
               </div>
             </motion.div>
           ))}
