@@ -1,176 +1,76 @@
 
 
-# Remove Hackathon References + Implement OpenClaw Agent Backbone
+## Plan: Shared Wallets, Remove Ethereum, Fix Balance API
 
-This plan covers two things: (1) cleaning up all hackathon-specific language across the app, and (2) building the OpenClaw integration as the AI agent engine powering Dance OpenClaw.
+### Problem Summary
+1. Ethereum mainnet is listed separately from Base, but users want Base as the EVM mainnet
+2. Currently each chain creates a separate Privy wallet, but since EVM addresses are the same across chains, one wallet should be shared between testnet and mainnet
+3. The Privy balance API returns `400: "Must provide both chain and asset"` because the `chain` and `asset` query parameters are missing
 
----
+### Changes
 
-## Part 1: Remove Hackathon References
+#### 1. Edge Function: `supabase/functions/agent-wallet/index.ts`
 
-The following files contain hackathon-related wording that will be updated to reflect a personal project:
+**Remove Ethereum from CHAIN_REGISTRY and USDC_CONTRACTS:**
+- Delete the `ethereum` entry from `CHAIN_REGISTRY`
+- Delete the `ethereum` entry from `USDC_CONTRACTS`
+- Remove the `solana: "solana_devnet"` and `story: "story_aeneid"` legacy aliases from `resolveChainKey` (since `solana` and `story` are now valid mainnet keys)
 
-### Footer (`src/components/landing/Footer.tsx`)
-- Line 16: Change `"Built for the global dance community · Hackathon Edition"` to `"Built for the global dance community"`
+**Introduce wallet grouping so testnet and mainnet share the same Privy wallet:**
+- Define a mapping from chain keys to a "wallet group" (e.g., `base_sepolia` and `base` both map to group `evm_base`, `solana_devnet` and `solana` map to `solana`, `story_aeneid` and `story` map to `evm_story`)
+- When `create_wallet` is called for a chain, check if any chain in the same group already has a wallet -- if so, reuse that wallet ID and address
+- When `create_all_wallets` is called, only create one Privy wallet per group, then assign it to all chains in that group
 
-### SetupGuide (`src/components/landing/SetupGuide.tsx`)
-- Line 44: Change `"Hackathon Setup Guide"` heading to just `"Getting Started"` or `"Setup Guide"`
-- The section content itself (Privy keys, faucets, deploy steps) stays -- it's useful regardless of context
+**Fix balance API calls:**
+- Add a `CHAIN_BALANCE_PARAMS` registry mapping each chain key to the correct Privy `chain` and `asset` query parameters:
+  - `base_sepolia` -> `chain=base-sepolia`, `asset=eth`
+  - `base` -> `chain=base`, `asset=eth`
+  - `solana_devnet` -> `chain=solana-devnet`, `asset=sol`
+  - `solana` -> `chain=solana`, `asset=sol`
+  - `story_aeneid` -> `chain=story-aeneid`, `asset=eth` (or IP native token, depending on Privy support)
+  - `story` -> `chain=story`, `asset=eth`
+- Update `get_balance` and `get_all_balances` to append `?chain=...&asset=...` query params to the balance URL
 
-### FAQ (`src/components/landing/FAQ.tsx`)
-- The FAQ about testnet tokens (line 15-16) currently reads like a hackathon demo. Reword to frame it as "the platform currently runs on testnets" rather than implying it's a temporary hackathon setup
+#### 2. Frontend: `src/components/wallet/CreateWalletPanel.tsx`
 
-### Navbar (`src/components/landing/Navbar.tsx`)  
-- Line 25: The "Setup Guide" nav link label stays but points to the renamed section
+- Remove the `ethereum` entry from `AVAILABLE_CHAINS`
 
-No other files contain hackathon-specific language -- the Hero, Auth, Onboarding, Explainers, RoleCards, AgentDiagram, X402FlowVisual, and WarningBanner are already clean.
+#### 3. Frontend: `src/components/wallet/WalletBalanceCard.tsx`
 
----
+- Remove `ethereum` entries from `CHAIN_COLORS`, `CHAIN_ICONS`, and `EXPLORER_URLS`
 
-## Part 2: OpenClaw Agent Backbone Integration
+#### 4. Frontend: `src/components/wallet/SendTokenForm.tsx`
 
-### Step 1 -- Database Migration
+- Remove `"ethereum"` from the `USDC_CHAINS` array
 
-Create two new tables with RLS policies:
+### Technical Details
 
-**`openclaw_connections`**
-| Column | Type | Notes |
-|---|---|---|
-| id | UUID (PK) | Default gen_random_uuid() |
-| user_id | UUID | NOT NULL, references auth.users |
-| agent_id | UUID | References agents table |
-| webhook_url | TEXT | User's OpenClaw gateway URL |
-| webhook_token | TEXT | Shared hook token for auth |
-| status | TEXT | connected / disconnected / pending |
-| last_ping_at | TIMESTAMPTZ | Last successful health check |
-| created_at | TIMESTAMPTZ | Default now() |
-| updated_at | TIMESTAMPTZ | Default now() |
-
-**`agent_tasks`**
-| Column | Type | Notes |
-|---|---|---|
-| id | UUID (PK) | Default gen_random_uuid() |
-| agent_id | UUID | References agents |
-| user_id | UUID | NOT NULL |
-| task_type | TEXT | tip, wallet_create, x402_payment, event_create, custom |
-| message | TEXT | Prompt sent to OpenClaw |
-| session_key | TEXT | For multi-turn conversations |
-| status | TEXT | pending / running / completed / failed |
-| response | JSONB | OpenClaw's response payload |
-| error_message | TEXT | Error details if failed |
-| created_at | TIMESTAMPTZ | Default now() |
-| completed_at | TIMESTAMPTZ | Null until done |
-
-RLS on both tables: users can only read/write their own records.
-
-### Step 2 -- Edge Functions
-
-Four new edge functions, all with CORS headers and JWT validation in code:
-
-1. **`openclaw-register`** (POST) -- Saves webhook URL + token, pings the instance to verify connectivity, updates `openclaw_connections` status
-2. **`openclaw-status`** (GET) -- Looks up connection, pings the webhook URL, returns reachability + last ping time
-3. **`openclaw-proxy`** (POST) -- Creates an `agent_tasks` record, sends the task to the user's OpenClaw instance via `POST {webhookUrl}/hooks/agent`, returns task ID for async tracking
-4. **`openclaw-webhook-callback`** (POST) -- Callback endpoint for OpenClaw to report task completion; validates token, updates task status and response
-
-### Step 3 -- Dashboard Layout with Sidebar Navigation
-
-Build the main app layout that wraps all authenticated pages:
-
-- **Sidebar**: Dashboard, Shop, Events, Wallet, Network, Docs, Settings
-- **Top bar**: User avatar, agent status indicator, wallet balance summary
-- Responsive -- collapses to a mobile drawer
-- Dark mode throughout
-
-Create placeholder pages for each route: `/dashboard`, `/shop`, `/events`, `/wallet`, `/network`, `/docs`, `/settings`
-
-### Step 4 -- OpenClaw Connection Card (Dashboard)
-
-A card component on the Dashboard page:
-
-- Shows connection status (connected/disconnected/pending) with a coloured indicator
-- Input fields for webhook URL and webhook token
-- "Test Connection" button calling `openclaw-status`
-- "Connect" button calling `openclaw-register`
-- Displays last successful ping timestamp
-- Link to OpenClaw docs for setup instructions
-
-### Step 5 -- Agent Command Center (Dashboard)
-
-The main interaction panel for the OpenClaw-backed agent:
-
-- Quick action buttons with pre-built prompts:
-  - "Create wallet on Base"
-  - "Tip top dancer 0.0001 ETH"
-  - "Check my balances"
-  - "Create a battle event"
-- Custom message input for freeform agent commands
-- Task history feed showing status (pending / running / completed / failed) with expandable response details
-- Enable realtime on `agent_tasks` table for live status updates
-
-### Step 6 -- Update Landing Page Setup Section
-
-Rework the SetupGuide component:
-- Rename heading from "Hackathon Setup Guide" to "Getting Started"
-- Keep the 3-step flow (Privy keys, fund wallets, deploy)
-- Add a 4th step: "Connect OpenClaw" -- install OpenClaw, enable webhooks, paste URL into the dashboard
-- Keep the supported networks reference card
-
----
-
-## Technical Details
-
-### OpenClaw Webhook API (outbound calls from edge functions)
+**Wallet Group Mapping (edge function):**
 
 ```text
-POST {webhookUrl}/hooks/agent
-Headers: Authorization: Bearer {token}
-Body: {
-  "message": "Create a new wallet on Base Sepolia",
-  "name": "DanceOpenClaw",
-  "sessionKey": "dance:task:{taskId}",
-  "deliver": false,
-  "timeoutSeconds": 120
+WALLET_GROUPS = {
+  base_sepolia: "evm_base",
+  base:         "evm_base",
+  solana_devnet: "solana",
+  solana:        "solana",
+  story_aeneid: "evm_story",
+  story:         "evm_story",
 }
 ```
 
-### New Files Created
+When creating a wallet for `base` (mainnet), the function checks if `base_sepolia` (same group) already has a wallet. If yes, it reuses the same `id` and `address`. This works because EVM addresses are identical across networks and Solana addresses work similarly.
 
-```text
-supabase/functions/openclaw-register/index.ts
-supabase/functions/openclaw-status/index.ts
-supabase/functions/openclaw-proxy/index.ts
-supabase/functions/openclaw-webhook-callback/index.ts
-src/components/dashboard/DashboardLayout.tsx
-src/components/dashboard/Sidebar.tsx
-src/components/dashboard/TopBar.tsx
-src/components/dashboard/OpenClawConnectionCard.tsx
-src/components/dashboard/AgentTaskPanel.tsx
-src/components/dashboard/AgentCard.tsx
-src/pages/Shop.tsx (placeholder)
-src/pages/Events.tsx (placeholder)
-src/pages/Wallet.tsx (placeholder)
-src/pages/Network.tsx (placeholder)
-src/pages/Docs.tsx (placeholder)
-src/pages/Settings.tsx (placeholder)
+**Balance API fix:**
+
+The current code calls:
+```
+GET /v1/wallets/{id}/balance
 ```
 
-### Files Modified
-
-```text
-src/components/landing/Footer.tsx -- remove "Hackathon Edition"
-src/components/landing/SetupGuide.tsx -- rename heading, add OpenClaw step
-src/components/landing/FAQ.tsx -- reword testnet answer
-src/pages/Dashboard.tsx -- replace placeholder with full agent dashboard
-src/App.tsx -- add new routes wrapped in DashboardLayout
-supabase/config.toml -- add edge function entries with verify_jwt = false
+It needs to call:
+```
+GET /v1/wallets/{id}/balance?chain=base-sepolia&asset=eth
 ```
 
-### Implementation Sequence
-
-1. Database migration (tables + RLS)
-2. Hackathon text cleanup (Footer, SetupGuide, FAQ)
-3. Edge functions (register, status, proxy, callback)
-4. Dashboard layout + sidebar + placeholder pages + routing
-5. OpenClaw connection card + agent command center
-6. Enable realtime on agent_tasks
+The `privyFetch` helper will be updated to support query parameters, or the URL will be constructed with params inline for balance calls.
 
