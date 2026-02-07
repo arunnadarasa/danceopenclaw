@@ -1,89 +1,111 @@
 
 
-## Upgrade OpenClaw Chat to Real-Time Streaming via WebSocket Bridge
+## Three-Part Update: Fix Wallet Creation, Unified Wallet UX, and Hackathon README
 
-### What
-Replace the current task-polling chat system with a real-time streaming approach. Instead of sending a message, creating a database task, and polling for completion, the new system opens a WebSocket connection to the user's OpenClaw server and streams the response token-by-token back to the browser via SSE (Server-Sent Events).
+### Part 1: Fix Privy API Chain Mapping (Edge Function)
 
-This is the same architecture that worked in your other project, adapted to use each user's stored connection details (webhook URL + token) from the database.
+**The Problem**
 
-### Why
-- **Instant responses**: Tokens appear as the agent generates them instead of waiting for the full response
-- **No polling overhead**: Eliminates the 5-second polling interval and Realtime subscription for chat
-- **Proven approach**: This exact pattern worked in your other Lovable project
-- **Better UX**: Typing-indicator feel with real streamed text, plus markdown rendering
+The screenshot shows Privy rejecting wallet creation requests with errors like "received 'base-sepolia'" and "received 'story-aeneid'". The Privy API field is `chain_type` and expects values like `ethereum` or `solana` -- not specific network names.
 
-### Architecture Change
-
-Current flow:
+The current code in the repository (line 217-219) looks correct:
 ```text
-Browser -> openclaw-proxy (HTTP POST) -> /hooks/agent -> DB task insert -> Poll DB for result
+chain_type: chainInfo.chain_type  // sends "ethereum" or "solana"
 ```
 
-New flow:
+However, the deployed edge function may be out of sync with the source code. The fix is to ensure the edge function is redeployed with the correct mapping.
+
+**Changes to `supabase/functions/agent-wallet/index.ts`**
+
+No code changes needed -- the existing chain registry correctly maps chains to Privy-compatible `chain_type` values (`"ethereum"` for all EVM chains including Story, `"solana"` for Solana). The function will be redeployed to ensure the live version matches the source.
+
+---
+
+### Part 2: Unified Wallet UX (Group by Chain Family)
+
+**The Insight**
+
+Testnet and mainnet wallets in the same chain family share the SAME Privy wallet (same address, same ID). The backend already handles this via `WALLET_GROUPS`:
+- Base Sepolia + Base = same EVM wallet
+- Solana Devnet + Solana = same Solana wallet
+- Story Aeneid + Story = same EVM wallet
+
+Currently the UI shows them as 6 separate cards split into "Testnets" and "Mainnets" sections. This is confusing because they share the same address.
+
+**New Design: Grouped Wallet Cards**
+
+Instead of separate testnet/mainnet sections, show 3 wallet group cards:
+
 ```text
-Browser -> openclaw-chat (HTTP POST) -> WebSocket to wss://user-ip/ws -> SSE stream back to browser
++---------------------------+  +---------------------------+  +---------------------------+
+|  Base                     |  |  Solana                   |  |  Story                    |
+|  0x1234...abcd            |  |  7kRz...9mNp              |  |  0x1234...abcd            |
+|                           |  |                           |  |                           |
+|  Base Sepolia (testnet)   |  |  Devnet (testnet)         |  |  Aeneid (testnet)         |
+|  0.05 ETH                 |  |  2.1 SOL                  |  |  0.00 IP                  |
+|                           |  |                           |  |                           |
+|  Base (mainnet)           |  |  Solana (mainnet)         |  |  Story (mainnet)          |
+|  0.00 ETH                 |  |  0.00 SOL                 |  |  0.00 IP                  |
++---------------------------+  +---------------------------+  +---------------------------+
 ```
 
-### Changes
+Each card shows:
+- The chain family name and icon
+- The shared wallet address (with copy + explorer links)
+- Both testnet and mainnet balances side by side
 
-#### 1. New Edge Function: `supabase/functions/openclaw-chat/index.ts`
+**Files Changed**
 
-A WebSocket-to-SSE bridge that:
-- Authenticates the user via their auth token
-- Reads the user's webhook URL and token from `openclaw_connections`
-- Converts the HTTP URL to a WebSocket URL (e.g., `https://178.x.x.x` becomes `wss://178.x.x.x/ws`)
-- Opens a WebSocket, authenticates with the OpenClaw protocol, sends the chat message
-- Streams agent response deltas back as SSE events in OpenAI-compatible format
-- Handles lifecycle events (end of response), timeouts (60s), and errors
-
-This does NOT require the `OPENCLAW_GATEWAY_TOKEN` secret since it reads each user's token from the database.
-
-#### 2. New Streaming Utility: `src/lib/openclaw-stream.ts`
-
-Frontend utility that:
-- Calls the `openclaw-chat` edge function via fetch
-- Parses the SSE response line-by-line
-- Calls `onDelta` for each token chunk as it arrives
-- Handles `[DONE]`, errors, and buffer edge cases
-
-#### 3. Updated Chat Widget: `src/components/dashboard/OpenClawChat.tsx`
-
-Replace the task-based polling approach with streaming:
-- Remove `pendingTaskIds`, Realtime subscription, and polling logic
-- Add `streamChat()` integration with `onDelta` callbacks
-- Stream tokens into the assistant message progressively (update last message content)
-- Show a "Thinking..." indicator only until the first token arrives
-- Render agent responses with markdown support using `react-markdown`
-- Add `isStreaming` state for the blinking cursor effect
-
-#### 4. Update `supabase/config.toml`
-
-Add the new function entry:
-```text
-[functions.openclaw-chat]
-verify_jwt = false
-```
-
-### What Stays the Same
-- **Connection card** (`OpenClawConnectionCard.tsx`): No changes -- users still configure webhook URL + token the same way
-- **Existing edge functions** (`openclaw-proxy`, `openclaw-status`, `openclaw-register`): Kept for backward compatibility and health checks
-- **Agent task panel** (`AgentTaskPanel.tsx`): Unchanged -- still shows task history
-- **Database tables**: No schema changes needed
-
-### New Dependencies
-- `react-markdown` -- for rendering agent responses with proper formatting
-- `remark-gfm` -- GitHub Flavored Markdown support (tables, strikethrough, etc.)
-
-### Files Created
-| File | Purpose |
-|------|---------|
-| `supabase/functions/openclaw-chat/index.ts` | WebSocket-to-SSE bridge edge function |
-| `src/lib/openclaw-stream.ts` | Frontend SSE streaming utility |
-
-### Files Modified
 | File | Change |
 |------|--------|
-| `src/components/dashboard/OpenClawChat.tsx` | Replace polling with streaming, add markdown rendering |
-| `supabase/config.toml` | Add `openclaw-chat` function entry |
+| `src/components/wallet/WalletBalanceCard.tsx` | Redesign to accept a wallet group (testnet + mainnet wallet pair) instead of a single wallet. Show both network balances within one card. |
+| `src/components/wallet/CreateWalletPanel.tsx` | Simplify to show 3 chain family buttons (Base, Solana, Story) instead of 6 separate chains. A single "Create All" button creates all 6 wallets at once. |
+| `src/pages/Wallet.tsx` | Group wallets by family before rendering. Remove separate testnet/mainnet sections. Show a single grid of 3 grouped cards. |
+| `src/hooks/useAgentWallet.ts` | No changes needed -- the hook already supports all operations. |
+
+**CreateWalletPanel Simplification**
+
+Instead of separate "Testnets" and "Mainnets" sections with 6 buttons, show:
+- A single "Create All Wallets" button that creates all 6 at once
+- Or individual chain family buttons: "Base", "Solana", "Story" -- each creating both testnet and mainnet entries
+
+---
+
+### Part 3: Hackathon Template README
+
+**Replace `README.md` with a polished hackathon submission README covering:**
+
+- Project name and tagline
+- What it does (agentic commerce for dance community)
+- Architecture overview (Privy wallets, OpenClaw AI agent, x402 payments, multi-chain)
+- Tech stack (React, Vite, Tailwind, Lovable Cloud, Privy, OpenClaw)
+- Supported chains (Base, Solana, Story -- testnet + mainnet)
+- Setup instructions (DigitalOcean 1-Click for OpenClaw, Privy keys, faucets)
+- Screenshots / feature list
+- Team info placeholder
+- License
+
+---
+
+### Part 4: Update Landing Page SetupGuide
+
+The `SetupGuide` component on the landing page still references Railway for OpenClaw deployment. Update Step 03 to reference the DigitalOcean tutorial, matching the dashboard connection card changes already made.
+
+**File: `src/components/landing/SetupGuide.tsx`**
+- Change step 03 description from "Deploy OpenClaw on Railway..." to "Deploy OpenClaw on DigitalOcean..."
+- Change link URL from `https://docs.openclaw.ai/install/railway` to `https://www.digitalocean.com/community/tutorials/how-to-run-openclaw`
+- Change link label from "OpenClaw Docs" to "DigitalOcean Guide"
+
+---
+
+### Summary of All Files
+
+| File | Action |
+|------|--------|
+| `supabase/functions/agent-wallet/index.ts` | Redeploy (no code changes) |
+| `src/components/wallet/WalletBalanceCard.tsx` | Redesign for grouped wallet display |
+| `src/components/wallet/CreateWalletPanel.tsx` | Simplify to chain family buttons |
+| `src/pages/Wallet.tsx` | Group wallets by family, single grid |
+| `src/components/landing/SetupGuide.tsx` | Update OpenClaw step to DigitalOcean |
+| `README.md` | Replace with hackathon template |
 
