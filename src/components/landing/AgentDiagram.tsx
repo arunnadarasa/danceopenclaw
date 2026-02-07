@@ -1,9 +1,9 @@
 import { motion } from "framer-motion";
 
 const nodes = [
-  { label: "Dancer Agent", emoji: "💃", x: "50%", y: "19%" },
-  { label: "Fan Agent", emoji: "🎤", x: "20%", y: "77.5%" },
-  { label: "Organiser Agent", emoji: "🎪", x: "80%", y: "77.5%" },
+  { label: "Dancer Agent", emoji: "💃", x: "50%", y: "19%", className: "-translate-x-1/2 -translate-y-full" },
+  { label: "Fan Agent", emoji: "🎤", x: "20%", y: "77.5%", className: "-translate-x-full" },
+  { label: "Organiser Agent", emoji: "🎪", x: "80%", y: "77.5%", className: "-translate-x-1/2 -translate-y-1/2" },
 ];
 
 export const AgentDiagram = () => {
@@ -79,7 +79,7 @@ export const AgentDiagram = () => {
           {nodes.map((node, i) => (
             <motion.div
               key={node.label}
-              className="absolute -translate-x-1/2 -translate-y-1/2"
+              className={`absolute ${node.className}`}
               style={{ left: node.x, top: node.y }}
               initial={{ scale: 0, opacity: 0 }}
               whileInView={{ scale: 1, opacity: 1 }}
