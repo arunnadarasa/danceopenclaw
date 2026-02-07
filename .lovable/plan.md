@@ -1,36 +1,31 @@
 
 
-## Update Docs Links and Add OpenRouter Setup Guidance
+## Update Cost Recommendations
 
 ### Overview
-Update all "OpenClaw setup docs" links to point to the correct Railway install guide, and add clear setup tips recommending Railway for hosting and OpenRouter (not Mistral) for the AI API key.
+Change the recommended Railway usage limits across all three files where they appear:
+- Hard usage limit: **$5 → $10**
+- Custom email alert: **$3 → $5**
 
----
+### Files to Update
 
-### Changes
+**1. `src/components/dashboard/OpenClawConnectionCard.tsx`**
+- In the "Quick Setup Tips" section, change "$5 hard usage limit" to "$10 hard usage limit" and "$3 custom email alert" to "$5 custom email alert"
 
-**1. Fix docs link in `OpenClawConnectionCard.tsx` (line 232)**
-- Change `href="https://openclaw.ai"` to `href="https://docs.openclaw.ai/install/railway"`
+**2. `src/components/landing/SetupGuide.tsx`**
+- In Step 01 "Get Your Privy Keys" description (or the Deploy step), no direct mention exists here -- but the landing page step cards will be checked for any cost references
 
-**2. Add a "Quick Setup Tips" section in `OpenClawConnectionCard.tsx`**
-Below the docs link, add a compact tips block (always visible, no collapsible needed) with:
-- **Hosting:** "We recommend Railway (Hobby Plan, $5/month). Set a $5 hard usage limit and a $3 custom email alert to control costs."  Link to railway.com.
-- **AI API Key:** "Use OpenRouter for your AI model key (set as `OPENROUTER_API_KEY` in Railway). Sign up and grab a free key to get started."  Link to openrouter.ai.
+**3. `src/pages/Docs.tsx`**
+- In the "Deploy on Railway" section, change the bullet point from "$5 hard usage limit" to "$10 hard usage limit" and "$3 custom email alert" to "$5 custom email alert"
 
-**3. Fix docs link in `SetupGuide.tsx` (line 27)**
-- Change `url: "https://openclaw.ai"` to `url: "https://docs.openclaw.ai/install/railway"`
-- Update description to mention OpenRouter instead of generic "enable webhooks" language:
-  "Deploy OpenClaw on Railway, add your OpenRouter API key, then paste your webhook URL and token into the dashboard."
+### Summary of Text Changes
 
-**4. Replace the placeholder Docs page (`Docs.tsx`)**
-Turn the "coming soon" page into a simple setup guide with three sections:
-- **Deploy on Railway** -- Step-by-step: sign up, deploy the ClawdBot template, set Hobby Plan ($5/mo), configure $5 hard limit + $3 email alert. Link to docs.openclaw.ai/install/railway.
-- **Get an AI API Key** -- Sign up at OpenRouter (openrouter.ai), create an API key, add it as `OPENROUTER_API_KEY` in your Railway environment variables.
-- **Connect to Dashboard** -- Go to your Dashboard Settings, paste your Railway public URL and webhook token, click Connect. Link back to /dashboard.
-- A prominent button linking to the full documentation at `https://docs.openclaw.ai/install/railway`.
+| Location | Old Text | New Text |
+|---|---|---|
+| OpenClawConnectionCard.tsx | `$5 hard usage limit` | `$10 hard usage limit` |
+| OpenClawConnectionCard.tsx | `$3 custom email alert` | `$5 custom email alert` |
+| Docs.tsx | `$5 hard usage limit` | `$10 hard usage limit` |
+| Docs.tsx | `$3 custom email alert` | `$5 custom email alert` |
 
-### Files Modified
-- `src/components/dashboard/OpenClawConnectionCard.tsx` -- fix link, add setup tips
-- `src/components/landing/SetupGuide.tsx` -- fix link, update description
-- `src/pages/Docs.tsx` -- replace placeholder with structured setup guide
+Three simple text replacements across two files. No logic or structural changes needed.
 
