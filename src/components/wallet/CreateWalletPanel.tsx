@@ -16,7 +16,6 @@ const AVAILABLE_CHAINS = [
   { key: "solana_devnet", label: "Solana Devnet", network: "testnet" as const },
   { key: "story_aeneid", label: "Story Aeneid", network: "testnet" as const },
   { key: "base", label: "Base", network: "mainnet" as const },
-  { key: "ethereum", label: "Ethereum", network: "mainnet" as const },
   { key: "solana", label: "Solana", network: "mainnet" as const },
   { key: "story", label: "Story", network: "mainnet" as const },
 ];

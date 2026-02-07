@@ -10,7 +10,6 @@ const corsHeaders = {
 const PRIVY_API_URL = "https://api.privy.io/v1";
 
 // ─── Chain Registry ────────────────────────────────────────────────────────────
-// Maps user-facing chain keys to Privy chain_type and chain_id
 const CHAIN_REGISTRY: Record<string, { chain_type: string; chain_id?: number; label: string; network: "testnet" | "mainnet" }> = {
   // Testnets
   base_sepolia:   { chain_type: "ethereum", chain_id: 84532,  label: "Base Sepolia",    network: "testnet" },
@@ -18,7 +17,6 @@ const CHAIN_REGISTRY: Record<string, { chain_type: string; chain_id?: number; la
   story_aeneid:   { chain_type: "ethereum", chain_id: 1315,   label: "Story Aeneid",    network: "testnet" },
   // Mainnets
   base:           { chain_type: "ethereum", chain_id: 8453,   label: "Base",            network: "mainnet" },
-  ethereum:       { chain_type: "ethereum", chain_id: 1,      label: "Ethereum",        network: "mainnet" },
   solana:         { chain_type: "solana",                      label: "Solana",          network: "mainnet" },
   story:          { chain_type: "ethereum", chain_id: 1514,   label: "Story",           network: "mainnet" },
 };
@@ -29,7 +27,29 @@ const USDC_CONTRACTS: Record<string, string> = {
   base_sepolia:   "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
   // Mainnets
   base:           "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-  ethereum:       "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+};
+
+// ─── Wallet Groups ─────────────────────────────────────────────────────────────
+// Testnet and mainnet chains in the same group share a single Privy wallet
+// because EVM addresses are identical across networks and Solana keypairs work similarly.
+const WALLET_GROUPS: Record<string, string> = {
+  base_sepolia:   "evm_base",
+  base:           "evm_base",
+  solana_devnet:  "solana",
+  solana:         "solana",
+  story_aeneid:   "evm_story",
+  story:          "evm_story",
+};
+
+// ─── Balance API Parameters ────────────────────────────────────────────────────
+// Privy balance endpoint requires chain + asset query params
+const CHAIN_BALANCE_PARAMS: Record<string, { chain: string; asset: string }> = {
+  base_sepolia:   { chain: "base-sepolia",  asset: "eth" },
+  base:           { chain: "base",          asset: "eth" },
+  solana_devnet:  { chain: "solana-devnet", asset: "sol" },
+  solana:         { chain: "solana",        asset: "sol" },
+  story_aeneid:   { chain: "story-aeneid",  asset: "eth" },
+  story:          { chain: "story",         asset: "eth" },
 };
 
 // ERC-20 transfer function signature
@@ -84,15 +104,26 @@ function jsonError(msg: string, status = 400) {
   });
 }
 
-// Helper: resolve chain key, supporting legacy keys from v1
+// Helper: resolve chain key (no more legacy aliases — solana & story are valid mainnet keys now)
 function resolveChainKey(chain: string | undefined, fallback = "base_sepolia"): string {
   if (!chain) return fallback;
-  // Support legacy keys from v1
-  const aliases: Record<string, string> = {
-    solana: "solana_devnet",
-    story: "story_aeneid",
-  };
-  return aliases[chain] || chain;
+  return chain;
+}
+
+// Helper: find an existing wallet in the same wallet group
+function findGroupSibling(
+  chainKey: string,
+  wallets: Record<string, { id: string; address: string; chain_type: string }>
+): { id: string; address: string; chain_type: string } | null {
+  const group = WALLET_GROUPS[chainKey];
+  if (!group) return null;
+
+  for (const [key, w] of Object.entries(wallets)) {
+    if (key !== chainKey && WALLET_GROUPS[key] === group) {
+      return w;
+    }
+  }
+  return null;
 }
 
 serve(async (req) => {
@@ -174,28 +205,38 @@ serve(async (req) => {
           return jsonError(`Wallet already exists for ${chainInfo.label}`, 400);
         }
 
-        const wallet = await privyFetch("/wallets", "POST", PRIVY_APP_ID, PRIVY_APP_SECRET, {
-          chain_type: chainInfo.chain_type,
-        });
+        // Check if a wallet in the same group already exists — reuse it
+        const sibling = findGroupSibling(chainKey, wallets);
+        if (sibling) {
+          wallets[chainKey] = {
+            id: sibling.id,
+            address: sibling.address,
+            chain_type: sibling.chain_type,
+          };
+        } else {
+          const wallet = await privyFetch("/wallets", "POST", PRIVY_APP_ID, PRIVY_APP_SECRET, {
+            chain_type: chainInfo.chain_type,
+          });
 
-        wallets[chainKey] = {
-          id: wallet.id,
-          address: wallet.address,
-          chain_type: wallet.chain_type,
-        };
+          wallets[chainKey] = {
+            id: wallet.id,
+            address: wallet.address,
+            chain_type: wallet.chain_type,
+          };
+        }
 
         await saveWallets();
 
         result = {
           message: `${chainInfo.label} wallet created successfully`,
-          wallet: { id: wallet.id, address: wallet.address, chain: chainKey, network: chainInfo.network },
+          wallet: { id: wallets[chainKey].id, address: wallets[chainKey].address, chain: chainKey, network: chainInfo.network },
         };
         break;
       }
 
       // ─── CREATE ALL WALLETS ──────────────────────────────────────
       case "create_all_wallets": {
-        const { network } = body; // "testnet" | "mainnet" | undefined (defaults to testnet)
+        const { network } = body;
         const targetNetwork = network || "testnet";
 
         const targetChains = Object.entries(CHAIN_REGISTRY).filter(
@@ -211,17 +252,27 @@ serve(async (req) => {
             continue;
           }
 
-          const wallet = await privyFetch("/wallets", "POST", PRIVY_APP_ID, PRIVY_APP_SECRET, {
-            chain_type: info.chain_type,
-          });
+          // Check if a sibling in the same group already has a wallet
+          const sibling = findGroupSibling(key, wallets);
+          if (sibling) {
+            wallets[key] = {
+              id: sibling.id,
+              address: sibling.address,
+              chain_type: sibling.chain_type,
+            };
+          } else {
+            const wallet = await privyFetch("/wallets", "POST", PRIVY_APP_ID, PRIVY_APP_SECRET, {
+              chain_type: info.chain_type,
+            });
 
-          wallets[key] = {
-            id: wallet.id,
-            address: wallet.address,
-            chain_type: wallet.chain_type,
-          };
+            wallets[key] = {
+              id: wallet.id,
+              address: wallet.address,
+              chain_type: wallet.chain_type,
+            };
+          }
 
-          created.push({ chain: key, label: info.label, id: wallet.id, address: wallet.address });
+          created.push({ chain: key, label: info.label, id: wallets[key].id, address: wallets[key].address });
         }
 
         await saveWallets();
@@ -265,8 +316,13 @@ serve(async (req) => {
           return jsonError(`No wallet found for ${chainKey}. Create one first.`);
         }
 
+        const balanceParams = CHAIN_BALANCE_PARAMS[chainKey];
+        const balancePath = balanceParams
+          ? `/wallets/${wallet.id}/balance?chain=${balanceParams.chain}&asset=${balanceParams.asset}`
+          : `/wallets/${wallet.id}/balance`;
+
         const balance = await privyFetch(
-          `/wallets/${wallet.id}/balance`,
+          balancePath,
           "GET",
           PRIVY_APP_ID,
           PRIVY_APP_SECRET
@@ -289,8 +345,13 @@ serve(async (req) => {
 
         for (const [key, wallet] of Object.entries(wallets)) {
           try {
+            const balanceParams = CHAIN_BALANCE_PARAMS[key];
+            const balancePath = balanceParams
+              ? `/wallets/${wallet.id}/balance?chain=${balanceParams.chain}&asset=${balanceParams.asset}`
+              : `/wallets/${wallet.id}/balance`;
+
             const balance = await privyFetch(
-              `/wallets/${wallet.id}/balance`,
+              balancePath,
               "GET",
               PRIVY_APP_ID,
               PRIVY_APP_SECRET

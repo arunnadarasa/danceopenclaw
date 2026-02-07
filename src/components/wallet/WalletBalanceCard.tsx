@@ -8,7 +8,6 @@ import type { WalletInfo, BalanceInfo } from "@/hooks/useAgentWallet";
 const CHAIN_COLORS: Record<string, string> = {
   base_sepolia: "bg-[hsl(var(--chain-eth))]",
   base: "bg-[hsl(var(--chain-eth))]",
-  ethereum: "bg-[hsl(var(--chain-eth))]",
   solana_devnet: "bg-[hsl(var(--chain-sol))]",
   solana: "bg-[hsl(var(--chain-sol))]",
   story_aeneid: "bg-[hsl(var(--chain-story))]",
@@ -18,7 +17,6 @@ const CHAIN_COLORS: Record<string, string> = {
 const CHAIN_ICONS: Record<string, string> = {
   base_sepolia: "Ξ",
   base: "Ξ",
-  ethereum: "Ξ",
   solana_devnet: "◎",
   solana: "◎",
   story_aeneid: "📖",
@@ -28,7 +26,6 @@ const CHAIN_ICONS: Record<string, string> = {
 const EXPLORER_URLS: Record<string, string> = {
   base_sepolia: "https://sepolia.basescan.org/address/",
   base: "https://basescan.org/address/",
-  ethereum: "https://etherscan.io/address/",
   solana_devnet: "https://explorer.solana.com/address/",
   solana: "https://explorer.solana.com/address/",
   story_aeneid: "https://aeneid.storyscan.xyz/address/",
