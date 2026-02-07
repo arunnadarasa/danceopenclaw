@@ -15,7 +15,7 @@ async function multiPathPing(
 ): Promise<{ reachable: boolean; pingDetail: string }> {
   const endpoints = [
     { path: "/hooks/wake", method: "POST", body: JSON.stringify({ text: "Dance OpenClaw health check", mode: "now" }) },
-    { path: "/webhook", method: "POST", body: JSON.stringify({ text: "ping" }) },
+    { path: "/hooks/agent", method: "POST", body: JSON.stringify({ message: "health check", sessionKey: "dance:healthcheck", deliver: false, wakeMode: "now" }) },
     { path: "/", method: "GET", body: undefined },
   ];
 
