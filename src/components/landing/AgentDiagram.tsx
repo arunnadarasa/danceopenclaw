@@ -1,9 +1,9 @@
 import { motion } from "framer-motion";
 
 const nodes = [
-  { label: "Dancer Agent", emoji: "💃", x: "50%", y: "8%" },
-  { label: "Fan Agent", emoji: "🎤", x: "20%", y: "78%" },
-  { label: "Organiser Agent", emoji: "🎪", x: "80%", y: "78%" },
+  { label: "Dancer Agent", emoji: "💃", x: "50%", y: "18%" },
+  { label: "Fan Agent", emoji: "🎤", x: "20%", y: "77%" },
+  { label: "Organiser Agent", emoji: "🎪", x: "80%", y: "77%" },
 ];
 
 export const AgentDiagram = () => {
@@ -45,22 +45,22 @@ export const AgentDiagram = () => {
 
             {/* Flow labels along edges */}
             <text
-              x="120" y="195"
+              x="128" y="192"
               fill="hsl(var(--muted-foreground))"
               fontSize="11"
               fontWeight="500"
               textAnchor="middle"
-              transform="rotate(-44, 120, 195)"
+              transform="rotate(-63, 128, 192)"
             >
               Tips &amp; Support
             </text>
             <text
-              x="280" y="195"
+              x="272" y="192"
               fill="hsl(var(--muted-foreground))"
               fontSize="11"
               fontWeight="500"
               textAnchor="middle"
-              transform="rotate(44, 280, 195)"
+              transform="rotate(63, 272, 192)"
             >
               Events &amp; Payouts
             </text>
