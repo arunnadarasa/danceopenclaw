@@ -114,7 +114,8 @@ serve(async (req) => {
           name: "DanceOpenClaw",
           sessionKey: taskSessionKey,
           deliver: false,
-          timeoutSeconds: 120,
+          wakeMode: "now",
+          timeoutSeconds: 25,
         }),
         signal: AbortSignal.timeout(30000),
       });
