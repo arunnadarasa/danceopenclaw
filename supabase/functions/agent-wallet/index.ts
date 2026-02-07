@@ -30,8 +30,6 @@ const USDC_CONTRACTS: Record<string, string> = {
 };
 
 // ─── Wallet Groups ─────────────────────────────────────────────────────────────
-// Testnet and mainnet chains in the same group share a single Privy wallet
-// because EVM addresses are identical across networks and Solana keypairs work similarly.
 const WALLET_GROUPS: Record<string, string> = {
   base_sepolia:   "evm_base",
   base:           "evm_base",
@@ -41,16 +39,144 @@ const WALLET_GROUPS: Record<string, string> = {
   story:          "evm_story",
 };
 
-// ─── Balance API Parameters ────────────────────────────────────────────────────
-// Privy balance endpoint requires chain + asset query params
-const CHAIN_BALANCE_PARAMS: Record<string, { chain: string; asset: string }> = {
-  base_sepolia:   { chain: "base-sepolia",  asset: "eth" },
-  base:           { chain: "base",          asset: "eth" },
-  solana_devnet:  { chain: "solana-devnet", asset: "sol" },
-  solana:         { chain: "solana",        asset: "sol" },
-  story_aeneid:   { chain: "story-aeneid",  asset: "eth" },
-  story:          { chain: "story",         asset: "eth" },
+// ─── RPC Network Config (for direct blockchain balance queries) ────────────────
+const ETH_NETWORKS: Record<string, { rpcUrl: string; usdcAddress: string }> = {
+  base_sepolia: { rpcUrl: "https://sepolia.base.org", usdcAddress: "0x036CbD53842c5426634e7929541eC2318f3dCF7e" },
+  base:         { rpcUrl: "https://mainnet.base.org", usdcAddress: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" },
 };
+
+const SOLANA_NETWORKS: Record<string, { rpcUrl: string; usdcMint: string }> = {
+  solana_devnet: { rpcUrl: "https://api.devnet.solana.com", usdcMint: "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU" },
+  solana:        { rpcUrl: "https://api.mainnet-beta.solana.com", usdcMint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v" },
+};
+
+const STORY_NETWORKS: Record<string, { rpcUrl: string; usdceAddress: string | null }> = {
+  story_aeneid: { rpcUrl: "https://aeneid.storyrpc.io", usdceAddress: null },
+  story:        { rpcUrl: "https://mainnet.storyrpc.io", usdceAddress: "0xF1815bd50389c46847f0Bda824eC8da914045D14" },
+};
+
+// ─── Direct RPC Balance Helpers ────────────────────────────────────────────────
+
+async function getEvmNativeBalance(address: string, rpcUrl: string): Promise<string> {
+  try {
+    const res = await fetch(rpcUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_getBalance", params: [address, "latest"] }),
+    });
+    const data = await res.json();
+    if (data.result && data.result !== "0x") {
+      const rawBalance = BigInt(data.result);
+      return (Number(rawBalance) / 1e18).toFixed(6);
+    }
+  } catch (e) {
+    console.error("getEvmNativeBalance error:", e);
+  }
+  return "0";
+}
+
+async function getEvmErc20Balance(address: string, rpcUrl: string, contractAddress: string): Promise<string> {
+  try {
+    const balanceOfSelector = "0x70a08231";
+    const paddedAddr = address.slice(2).padStart(64, "0");
+    const callData = balanceOfSelector + paddedAddr;
+
+    const res = await fetch(rpcUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0", id: 1, method: "eth_call",
+        params: [{ to: contractAddress, data: callData }, "latest"],
+      }),
+    });
+    const data = await res.json();
+    if (data.result && data.result !== "0x") {
+      const rawBalance = BigInt(data.result);
+      return (Number(rawBalance) / 1_000_000).toFixed(2);
+    }
+  } catch (e) {
+    console.error("getEvmErc20Balance error:", e);
+  }
+  return "0";
+}
+
+async function getSolanaNativeBalance(address: string, rpcUrl: string): Promise<string> {
+  try {
+    const res = await fetch(rpcUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "getBalance", params: [address] }),
+    });
+    const data = await res.json();
+    if (data.result?.value !== undefined) {
+      return (Number(data.result.value) / 1e9).toFixed(6);
+    }
+  } catch (e) {
+    console.error("getSolanaNativeBalance error:", e);
+  }
+  return "0";
+}
+
+async function getSolanaTokenBalance(address: string, rpcUrl: string, mint: string): Promise<string> {
+  try {
+    const res = await fetch(rpcUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0", id: 1, method: "getTokenAccountsByOwner",
+        params: [address, { mint }, { encoding: "jsonParsed" }],
+      }),
+    });
+    const data = await res.json();
+    if (data.result?.value?.length > 0) {
+      let total = 0;
+      for (const account of data.result.value) {
+        const tokenAmount = account.account?.data?.parsed?.info?.tokenAmount;
+        if (tokenAmount) total += Number(tokenAmount.uiAmount || 0);
+      }
+      return total.toFixed(2);
+    }
+  } catch (e) {
+    console.error("getSolanaTokenBalance error:", e);
+  }
+  return "0";
+}
+
+// Fetch balances for a single chain key + address
+async function fetchChainBalances(chainKey: string, address: string): Promise<{ native_balance: string; usdc_balance: string }> {
+  // Base (EVM)
+  if (ETH_NETWORKS[chainKey]) {
+    const cfg = ETH_NETWORKS[chainKey];
+    const [native, usdc] = await Promise.all([
+      getEvmNativeBalance(address, cfg.rpcUrl),
+      getEvmErc20Balance(address, cfg.rpcUrl, cfg.usdcAddress),
+    ]);
+    return { native_balance: native, usdc_balance: usdc };
+  }
+
+  // Solana
+  if (SOLANA_NETWORKS[chainKey]) {
+    const cfg = SOLANA_NETWORKS[chainKey];
+    const [native, usdc] = await Promise.all([
+      getSolanaNativeBalance(address, cfg.rpcUrl),
+      getSolanaTokenBalance(address, cfg.rpcUrl, cfg.usdcMint),
+    ]);
+    return { native_balance: native, usdc_balance: usdc };
+  }
+
+  // Story (EVM-compatible)
+  if (STORY_NETWORKS[chainKey]) {
+    const cfg = STORY_NETWORKS[chainKey];
+    const native = await getEvmNativeBalance(address, cfg.rpcUrl);
+    let usdc = "0";
+    if (cfg.usdceAddress) {
+      usdc = await getEvmErc20Balance(address, cfg.rpcUrl, cfg.usdceAddress);
+    }
+    return { native_balance: native, usdc_balance: usdc };
+  }
+
+  return { native_balance: "0", usdc_balance: "0" };
+}
 
 // ERC-20 transfer function signature
 const ERC20_TRANSFER_SIG = "0xa9059cbb";
@@ -104,7 +230,7 @@ function jsonError(msg: string, status = 400) {
   });
 }
 
-// Helper: resolve chain key (no more legacy aliases — solana & story are valid mainnet keys now)
+// Helper: resolve chain key
 function resolveChainKey(chain: string | undefined, fallback = "base_sepolia"): string {
   if (!chain) return fallback;
   return chain;
@@ -252,7 +378,6 @@ serve(async (req) => {
             continue;
           }
 
-          // Check if a sibling in the same group already has a wallet
           const sibling = findGroupSibling(key, wallets);
           if (sibling) {
             wallets[key] = {
@@ -307,7 +432,7 @@ serve(async (req) => {
         break;
       }
 
-      // ─── GET BALANCE ─────────────────────────────────────────────
+      // ─── GET BALANCE (single chain, direct RPC) ──────────────────
       case "get_balance": {
         const chainKey = resolveChainKey(body.chain);
         const wallet = wallets[chainKey];
@@ -316,17 +441,7 @@ serve(async (req) => {
           return jsonError(`No wallet found for ${chainKey}. Create one first.`);
         }
 
-        const balanceParams = CHAIN_BALANCE_PARAMS[chainKey];
-        const balancePath = balanceParams
-          ? `/wallets/${wallet.id}/balance?chain=${balanceParams.chain}&asset=${balanceParams.asset}`
-          : `/wallets/${wallet.id}/balance`;
-
-        const balance = await privyFetch(
-          balancePath,
-          "GET",
-          PRIVY_APP_ID,
-          PRIVY_APP_SECRET
-        );
+        const balanceData = await fetchChainBalances(chainKey, wallet.address);
 
         result = {
           chain: chainKey,
@@ -334,36 +449,44 @@ serve(async (req) => {
           network: CHAIN_REGISTRY[chainKey]?.network,
           wallet_id: wallet.id,
           address: wallet.address,
-          ...balance,
+          ...balanceData,
         };
         break;
       }
 
-      // ─── GET ALL BALANCES ────────────────────────────────────────
+      // ─── GET ALL BALANCES (direct RPC for all chains) ────────────
       case "get_all_balances": {
         const balances: Record<string, unknown> = {};
 
-        for (const [key, wallet] of Object.entries(wallets)) {
-          try {
-            const balanceParams = CHAIN_BALANCE_PARAMS[key];
-            const balancePath = balanceParams
-              ? `/wallets/${wallet.id}/balance?chain=${balanceParams.chain}&asset=${balanceParams.asset}`
-              : `/wallets/${wallet.id}/balance`;
+        const entries = Object.entries(wallets);
+        const results = await Promise.allSettled(
+          entries.map(async ([key, wallet]) => {
+            const balanceData = await fetchChainBalances(key, wallet.address);
+            return { key, wallet, balanceData };
+          })
+        );
 
-            const balance = await privyFetch(
-              balancePath,
-              "GET",
-              PRIVY_APP_ID,
-              PRIVY_APP_SECRET
-            );
+        for (const res of results) {
+          if (res.status === "fulfilled") {
+            const { key, wallet, balanceData } = res.value;
             balances[key] = {
               address: wallet.address,
               label: CHAIN_REGISTRY[key]?.label,
               network: CHAIN_REGISTRY[key]?.network,
-              ...balance,
+              ...balanceData,
             };
-          } catch (e) {
-            balances[key] = { address: wallet.address, error: e instanceof Error ? e.message : "Failed" };
+          } else {
+            // Should not happen often since fetchChainBalances catches internally
+            const idx = results.indexOf(res);
+            const [key, wallet] = entries[idx];
+            balances[key] = {
+              address: wallet.address,
+              label: CHAIN_REGISTRY[key]?.label,
+              network: CHAIN_REGISTRY[key]?.network,
+              native_balance: "0",
+              usdc_balance: "0",
+              error: res.reason instanceof Error ? res.reason.message : "Failed",
+            };
           }
         }
 
@@ -417,13 +540,11 @@ serve(async (req) => {
         if (!usdcAddress) return jsonError(`USDC not available on ${chainInfo.label}. Available on: ${Object.keys(USDC_CONTRACTS).join(", ")}`);
         if (!body.to || !body.amount) return jsonError("to and amount are required. Amount is in USDC units (e.g. '1.50' for $1.50)");
 
-        // Convert USDC amount to 6-decimal raw value
         const parts = body.amount.toString().split(".");
         const whole = parts[0] || "0";
         const frac = (parts[1] || "").padEnd(6, "0").slice(0, 6);
         const rawAmount = (BigInt(whole) * BigInt(1_000_000) + BigInt(frac)).toString();
 
-        // Encode ERC-20 transfer(address,uint256) calldata
         const calldata = ERC20_TRANSFER_SIG +
           padAddress(body.to).replace("0x", "") +
           encodeUint256(rawAmount);

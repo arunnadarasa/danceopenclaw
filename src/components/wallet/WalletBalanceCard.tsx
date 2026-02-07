@@ -5,10 +5,10 @@ import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import type { WalletInfo, BalanceInfo } from "@/hooks/useAgentWallet";
 
-const FAMILY_META: Record<string, { icon: string; colorClass: string; label: string }> = {
-  base: { icon: "Ξ", colorClass: "bg-[hsl(var(--chain-eth))]", label: "Base" },
-  solana: { icon: "◎", colorClass: "bg-[hsl(var(--chain-sol))]", label: "Solana" },
-  story: { icon: "📖", colorClass: "bg-[hsl(var(--chain-story))]", label: "Story" },
+const FAMILY_META: Record<string, { icon: string; colorClass: string; label: string; nativeUnit: string }> = {
+  base: { icon: "Ξ", colorClass: "bg-[hsl(var(--chain-eth))]", label: "Base", nativeUnit: "ETH" },
+  solana: { icon: "◎", colorClass: "bg-[hsl(var(--chain-sol))]", label: "Solana", nativeUnit: "SOL" },
+  story: { icon: "📖", colorClass: "bg-[hsl(var(--chain-story))]", label: "Story", nativeUnit: "IP" },
 };
 
 const EXPLORER_URLS: Record<string, string> = {
@@ -18,6 +18,16 @@ const EXPLORER_URLS: Record<string, string> = {
   solana: "https://explorer.solana.com/address/",
   story_aeneid: "https://aeneid.storyscan.xyz/address/",
   story: "https://storyscan.xyz/address/",
+};
+
+// Map chain keys to their family
+const CHAIN_TO_FAMILY: Record<string, string> = {
+  base_sepolia: "base",
+  base: "base",
+  solana_devnet: "solana",
+  solana: "solana",
+  story_aeneid: "story",
+  story: "story",
 };
 
 export interface WalletGroup {
@@ -34,7 +44,7 @@ interface WalletBalanceCardProps {
 }
 
 export const WalletBalanceCard = ({ group, balances, balanceLoading }: WalletBalanceCardProps) => {
-  const meta = FAMILY_META[group.family] || { icon: "💰", colorClass: "bg-muted", label: group.family };
+  const meta = FAMILY_META[group.family] || { icon: "💰", colorClass: "bg-muted", label: group.family, nativeUnit: "?" };
   const shortAddress = `${group.address.slice(0, 6)}…${group.address.slice(-4)}`;
 
   const copyAddress = () => {
@@ -49,6 +59,8 @@ export const WalletBalanceCard = ({ group, balances, balanceLoading }: WalletBal
   const renderNetworkBalance = (wallet: WalletInfo | undefined, label: string) => {
     if (!wallet) return null;
     const bal = balances[wallet.chain];
+    const family = CHAIN_TO_FAMILY[wallet.chain] || group.family;
+    const nativeUnit = FAMILY_META[family]?.nativeUnit || "?";
 
     return (
       <div className="flex items-center justify-between rounded-lg bg-muted/40 px-3 py-2">
@@ -69,13 +81,13 @@ export const WalletBalanceCard = ({ group, balances, balanceLoading }: WalletBal
           ) : (
             <>
               <p className="font-display text-sm font-semibold text-foreground tabular-nums">
-                {bal?.native_balance ?? "—"}
+                {bal?.native_balance ?? "—"} {nativeUnit}
               </p>
-              {bal?.token_balances?.map((t) => (
-                <p key={t.symbol} className="text-xs text-muted-foreground">
-                  {t.balance} {t.symbol}
+              {bal?.usdc_balance && bal.usdc_balance !== "0" && bal.usdc_balance !== "0.00" && (
+                <p className="text-xs text-muted-foreground">
+                  {bal.usdc_balance} USDC
                 </p>
-              ))}
+              )}
             </>
           )}
         </div>

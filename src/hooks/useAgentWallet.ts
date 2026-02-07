@@ -25,7 +25,7 @@ export interface BalanceInfo {
   label: string;
   network: string;
   native_balance?: string;
-  token_balances?: Array<{ symbol: string; balance: string }>;
+  usdc_balance?: string;
   error?: string;
 }
 
