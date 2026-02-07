@@ -1,48 +1,81 @@
 
 
-## Fix Agent Diagram: Align Emoji Nodes to Triangle Corners
+## Fix Agent Diagram: Precise Node Alignment on Mobile
 
 ### Problem
-The emoji nodes and SVG triangle use **two different coordinate systems** that don't line up:
-- The SVG triangle is drawn in a 400x400 square viewBox, then scaled with `preserveAspectRatio` to fit the container
-- The emoji nodes are positioned using CSS percentages of the container (which is NOT square -- 420px tall with variable width)
+Two issues visible in the mobile screenshot:
 
-On mobile especially, the container is taller than wide, so the SVG shrinks and centers vertically, while the CSS nodes remain at their percentage positions -- creating the visible gap.
+1. **Emoji boxes misaligned from triangle corners**: The CSS `translate-y: -50%` centers the entire node div (emoji box + gap + label text, totaling ~80px) at the triangle vertex. But the *emoji box center* is 28px from the div top, while the div center is 40px -- creating a ~12px offset. The emoji box sits below the top vertex and above the bottom vertices.
+
+2. **Right-side clipping**: The "Organiser Agent" label at x=80% extends beyond the container on narrow mobile screens and gets clipped.
 
 ### Solution
-Make the container **square** using `aspect-ratio: 1/1`. Since the SVG viewBox is 400x400 (a square), a square container means CSS percentages map directly to SVG coordinates. The nodes will sit exactly at the triangle corners on all screen sizes.
+
+**Restructure the node layout** so that only the emoji box determines the positioned height. Move the label to `position: absolute` so it doesn't contribute to the parent's height calculation. This way, `-translate-y-1/2` shifts by exactly half the emoji box height (~28px), placing the emoji center precisely at the triangle vertex.
+
+**Add overflow-visible** to the diagram container so labels can extend beyond the container bounds without clipping.
 
 ### Changes (single file: `src/components/landing/AgentDiagram.tsx`)
 
-**1. Replace fixed height with aspect-ratio on the diagram container**
+**1. Add `overflow-visible` to the diagram container**
 
-Change the container from:
+Change the container class to include `overflow-visible` so the node labels (especially "Organiser Agent" at the right edge) don't get clipped on narrow screens:
+
 ```
-h-[420px] max-w-md sm:max-w-lg
-```
-To:
-```
-aspect-square max-w-sm sm:max-w-md
+<div className="relative mx-auto mt-16 aspect-square max-w-sm sm:max-w-md overflow-visible">
 ```
 
-This makes the container always square, so 50%/18% in CSS maps exactly to (200,75) in the SVG viewBox, and 20%/77% maps to (80,310), etc.
+**2. Restructure the node markup**
 
-**2. Fine-tune node y-percentages to exact values**
+Currently the node is a flex column where both the emoji box and label contribute to the div height:
 
-With a square container, the exact mapping from SVG coordinates to CSS percentages is:
-- Top node (200, 75): x=50%, y=18.75% (round to `19%`)
-- Bottom-left (80, 310): x=20%, y=77.5% (round to `77.5%`)
-- Bottom-right (320, 310): x=80%, y=77.5% (round to `77.5%`)
+```text
++-------------------+
+|    [emoji box]    |   <-- these two together = ~80px height
+|      label        |   <-- translate-y: -50% shifts by 40px
++-------------------+
+```
 
-**3. Reduce max-width slightly**
+Change to: make the label `absolute` so only the emoji box determines the div height:
 
-Since the container is now square, `max-w-md` (28rem) would be quite large. Using `max-w-sm` (24rem) on mobile and `max-w-md` on `sm:` screens keeps it well-proportioned.
+```text
++-------------------+
+|    [emoji box]    |   <-- only this = ~56px height
++-------------------+   <-- translate-y: -50% shifts by 28px (correct!)
+      label            <-- absolute, positioned below, outside height calc
+```
 
-### Why This Works
-With a square container and a square SVG viewBox, both coordinate systems become identical -- percentage positions in CSS correspond exactly to the same proportional positions in the SVG. The triangle corners and emoji nodes will always align regardless of screen size.
+The updated node JSX:
+
+```tsx
+<motion.div
+  key={node.label}
+  className="absolute -translate-x-1/2 -translate-y-1/2"
+  style={{ left: node.x, top: node.y }}
+  ...
+>
+  <div className="relative flex flex-col items-center">
+    <div className="flex h-14 w-14 sm:h-16 sm:w-16 items-center justify-center rounded-2xl border border-border bg-card shadow-lg animate-float" ...>
+      <span className="text-xl sm:text-2xl">{node.emoji}</span>
+    </div>
+    <span className="absolute top-full mt-1 text-xs sm:text-sm font-semibold whitespace-nowrap">
+      {node.label}
+    </span>
+  </div>
+</motion.div>
+```
+
+The key change is `absolute top-full mt-1` on the label span -- this positions it just below the emoji box without contributing to the parent's height, so the translate operation only accounts for the emoji box dimensions.
+
+### Why This Fixes It
+
+- The `-translate-y-1/2` now shifts by half of only the emoji box height (~28px on mobile), not half of the entire node (~40px). This places the emoji box center exactly at the triangle vertex coordinates.
+- `overflow-visible` prevents clipping of labels that extend beyond the container edges on narrow screens.
+- No change to the node coordinates or SVG geometry needed -- the existing values (19%, 77.5%) already match the SVG vertices correctly.
 
 ### Technical Summary
-Single file change to `src/components/landing/AgentDiagram.tsx`:
-- Line 24: Change container class from `h-[420px] max-w-md sm:max-w-lg` to `aspect-square max-w-sm sm:max-w-md`
-- Lines 4-6: Update node y-coordinates to `19%` / `77.5%` / `77.5%` for precise alignment
+
+Single file: `src/components/landing/AgentDiagram.tsx`
+- Line 24: Add `overflow-visible` to the diagram container class
+- Lines 89-97: Restructure node markup so the label is `position: absolute` with `top-full`, removing it from the height calculation used by `translate-y`
 
