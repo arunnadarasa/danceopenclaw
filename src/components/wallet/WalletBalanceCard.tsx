@@ -1,4 +1,4 @@
-import { Copy, ExternalLink } from "lucide-react";
+import { Copy, ExternalLink, Droplets } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,20 @@ const FAMILY_META: Record<string, { icon: string; colorClass: string; label: str
   base: { icon: "Ξ", colorClass: "bg-[hsl(var(--chain-eth))]", label: "Base", nativeUnit: "ETH" },
   solana: { icon: "◎", colorClass: "bg-[hsl(var(--chain-sol))]", label: "Solana", nativeUnit: "SOL" },
   story: { icon: "📖", colorClass: "bg-[hsl(var(--chain-story))]", label: "Story", nativeUnit: "IP" },
+};
+
+const TESTNET_FAUCETS: Record<string, { token: string; label: string; url: string }[]> = {
+  base_sepolia: [
+    { token: "ETH", label: "Coinbase Faucet", url: "https://portal.cdp.coinbase.com/products/faucet" },
+    { token: "USDC", label: "Circle Faucet", url: "https://faucet.circle.com/" },
+  ],
+  solana_devnet: [
+    { token: "SOL", label: "Solana Faucet", url: "https://faucet.solana.com/" },
+    { token: "USDC", label: "Circle Faucet", url: "https://faucet.circle.com/" },
+  ],
+  story_aeneid: [
+    { token: "IP", label: "Story Faucet", url: "https://faucet.story.foundation/" },
+  ],
 };
 
 const EXPLORER_URLS: Record<string, string> = {
@@ -91,6 +105,24 @@ export const WalletBalanceCard = ({ group, balances, balanceLoading }: WalletBal
             </>
           )}
         </div>
+        {/* Faucet links for testnet rows */}
+        {wallet.network === "testnet" && TESTNET_FAUCETS[wallet.chain] && (
+          <div className="flex items-center gap-3 mt-1.5 justify-end">
+            <Droplets className="h-3 w-3 text-muted-foreground" />
+            {TESTNET_FAUCETS[wallet.chain].map((faucet) => (
+              <a
+                key={faucet.token}
+                href={faucet.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
+              >
+                {faucet.token} Faucet
+                <ExternalLink className="h-2.5 w-2.5" />
+              </a>
+            ))}
+          </div>
+        )}
       </div>
     );
   };
