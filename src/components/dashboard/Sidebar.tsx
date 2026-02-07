@@ -7,10 +7,10 @@ import {
   Globe,
   BookOpen,
   Settings,
-  Zap,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import logoImg from "@/assets/Dance_OpenClaw.png";
 
 const navItems = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -47,9 +47,7 @@ export const Sidebar = ({ open, onClose }: SidebarProps) => {
         {/* Logo */}
         <div className="flex h-16 items-center justify-between px-5">
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sidebar-primary/10">
-              <Zap className="h-4 w-4 text-sidebar-primary" />
-            </div>
+            <img src={logoImg} alt="Dance OpenClaw" className="h-8 w-8 rounded-lg object-contain" />
             <span className="font-display text-lg font-bold text-sidebar-foreground">
               Dance OpenClaw
             </span>

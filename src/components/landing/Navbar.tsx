@@ -1,15 +1,14 @@
 import { Button } from "@/components/ui/button";
 import { Zap } from "lucide-react";
 import { Link } from "react-router-dom";
+import logoImg from "@/assets/Dance_OpenClaw.png";
 
 export const Navbar = () => {
   return (
     <nav className="sticky top-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-xl">
       <div className="container mx-auto flex items-center justify-between px-4 py-3">
         <div className="flex items-center gap-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
-            <Zap className="h-5 w-5 text-primary" />
-          </div>
+          <img src={logoImg} alt="Dance OpenClaw" className="h-9 w-9 rounded-lg object-contain" />
           <span className="font-display text-xl font-bold">
             Dance <span className="text-gradient-primary">OpenClaw</span>
           </span>
