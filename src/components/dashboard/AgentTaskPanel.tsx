@@ -76,7 +76,14 @@ export const AgentTaskPanel = () => {
       const { data, error } = await supabase.functions.invoke("openclaw-proxy", {
         body: { taskType, message },
       });
-      if (error) throw error;
+      if (error) {
+        let msg = error.message;
+        try {
+          const body = await error.context?.json?.();
+          if (body?.error) msg = body.error;
+        } catch {}
+        throw new Error(msg);
+      }
       toast.success("Task submitted to your OpenClaw agent");
       setCustomMessage("");
       fetchTasks();
