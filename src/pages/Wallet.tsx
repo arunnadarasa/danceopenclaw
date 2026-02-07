@@ -1,11 +1,43 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { Wallet, RefreshCw, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { WalletBalanceCard } from "@/components/wallet/WalletBalanceCard";
+import { WalletBalanceCard, WalletGroup } from "@/components/wallet/WalletBalanceCard";
 import { SendTokenForm } from "@/components/wallet/SendTokenForm";
 import { CreateWalletPanel } from "@/components/wallet/CreateWalletPanel";
 import { useAgentWallet, WalletInfo, BalanceInfo } from "@/hooks/useAgentWallet";
 import { toast } from "@/hooks/use-toast";
+
+// Maps each chain key to its family name
+const CHAIN_TO_FAMILY: Record<string, string> = {
+  base_sepolia: "base",
+  base: "base",
+  solana_devnet: "solana",
+  solana: "solana",
+  story_aeneid: "story",
+  story: "story",
+};
+
+const FAMILY_ORDER = ["base", "solana", "story"];
+
+function groupWallets(wallets: WalletInfo[]): WalletGroup[] {
+  const families: Record<string, WalletGroup> = {};
+
+  for (const w of wallets) {
+    const family = CHAIN_TO_FAMILY[w.chain] || w.chain;
+    if (!families[family]) {
+      families[family] = { family, address: w.address };
+    }
+    if (w.network === "testnet") {
+      families[family].testnet = w;
+    } else {
+      families[family].mainnet = w;
+    }
+  }
+
+  return FAMILY_ORDER
+    .filter((f) => families[f])
+    .map((f) => families[f]);
+}
 
 const WalletPage = () => {
   const {
@@ -32,7 +64,7 @@ const WalletPage = () => {
       if (walletsRes.wallets.length > 0) {
         const balancesRes = await getAllBalances();
         if (balancesRes?.balances) {
-          setBalances(balancesRes.balances);
+          setBalances(balancesRes.balances as Record<string, BalanceInfo>);
         }
       }
     }
@@ -41,7 +73,7 @@ const WalletPage = () => {
 
   useEffect(() => {
     fetchData();
-  }, []);  // eslint-disable-line react-hooks/exhaustive-deps
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -79,9 +111,8 @@ const WalletPage = () => {
     return res;
   };
 
-  const testnetWallets = wallets.filter((w) => w.network === "testnet");
-  const mainnetWallets = wallets.filter((w) => w.network === "mainnet");
   const existingChains = wallets.map((w) => w.chain);
+  const walletGroups = useMemo(() => groupWallets(wallets), [wallets]);
 
   if (initialLoading) {
     return (
@@ -126,41 +157,17 @@ const WalletPage = () => {
         existingChains={existingChains}
       />
 
-      {/* Testnet wallets */}
-      {testnetWallets.length > 0 && (
-        <div>
-          <h2 className="font-display text-lg font-semibold text-foreground mb-4">
-            Testnets
-          </h2>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {testnetWallets.map((w) => (
-              <WalletBalanceCard
-                key={w.chain}
-                wallet={w}
-                balance={balances[w.chain]}
-                balanceLoading={refreshing}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Mainnet wallets */}
-      {mainnetWallets.length > 0 && (
-        <div>
-          <h2 className="font-display text-lg font-semibold text-foreground mb-4">
-            Mainnets
-          </h2>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {mainnetWallets.map((w) => (
-              <WalletBalanceCard
-                key={w.chain}
-                wallet={w}
-                balance={balances[w.chain]}
-                balanceLoading={refreshing}
-              />
-            ))}
-          </div>
+      {/* Grouped wallet cards */}
+      {walletGroups.length > 0 && (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {walletGroups.map((group) => (
+            <WalletBalanceCard
+              key={group.family}
+              group={group}
+              balances={balances}
+              balanceLoading={refreshing}
+            />
+          ))}
         </div>
       )}
 

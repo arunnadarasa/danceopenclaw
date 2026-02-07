@@ -1,73 +1,146 @@
-# Welcome to your Lovable project
+# Dance OpenClaw 🕺🤖💸
 
-## Project info
+**Agentic commerce for the dance community — powered by AI agents, multi-chain wallets, and micro-payments.**
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+> Built for the Privy × OpenClaw Hackathon
 
-## How can I edit this code?
+---
 
-There are several ways of editing your application.
+## What Is It?
 
-**Use Lovable**
+Dance OpenClaw is a platform where dance professionals, fans, and event organisers interact through AI-powered agents that can hold funds, tip each other, pay for API calls, and trade merchandise — all autonomously.
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+### Key Features
 
-Changes made via Lovable will be committed automatically to this repo.
+- **Multi-Chain Agent Wallets** — Each user gets Privy server wallets across Base, Solana, and Story (testnet + mainnet share the same address)
+- **OpenClaw AI Agent** — Real-time streaming chat via WebSocket bridge (SSE to browser)
+- **x402 Micro-Payments** — USDC payments for API access using the x402 protocol
+- **Agent-to-Agent Tipping** — Native token and USDC transfers between agent wallets
+- **Merch Marketplace** — Shopify Storefront API-powered dance merchandise shop
+- **Role-Based Access** — Dancer, Fan, and Organiser roles with tailored experiences
 
-**Use your preferred IDE**
+---
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+## Architecture
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+```
+┌─────────────┐     ┌──────────────────┐     ┌─────────────────┐
+│   Browser   │────▶│  Lovable Cloud   │────▶│   Privy API     │
+│  (React)    │ SSE │  Edge Functions   │     │  Server Wallets │
+└─────────────┘     └──────────────────┘     └─────────────────┘
+                           │                         │
+                    ┌──────┴──────┐            ┌─────┴──────┐
+                    │  OpenClaw   │            │  On-Chain   │
+                    │  AI Agent   │            │  Base/Sol/  │
+                    │  (your VPS) │            │  Story      │
+                    └─────────────┘            └────────────┘
 ```
 
-**Edit a file directly in GitHub**
+### Edge Functions
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+| Function | Purpose |
+|----------|---------|
+| `agent-wallet` | Create, query, and transact with Privy server wallets |
+| `openclaw-chat` | WebSocket-to-SSE bridge for real-time agent streaming |
+| `openclaw-proxy` | HTTP proxy for OpenClaw webhook commands |
+| `openclaw-status` | Health check for connected OpenClaw instances |
+| `openclaw-register` | Register new OpenClaw agent connections |
+| `openclaw-webhook-callback` | Receive async agent task results |
 
-**Use GitHub Codespaces**
+---
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## Supported Chains
 
-## What technologies are used for this project?
+| Family | Testnet | Mainnet | Token |
+|--------|---------|---------|-------|
+| **Base** | Base Sepolia | Base | ETH + USDC |
+| **Solana** | Solana Devnet | Solana | SOL |
+| **Story** | Story Aeneid | Story | IP |
 
-This project is built with:
+> Testnet and mainnet wallets in the same family share the same Privy wallet address.
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+---
 
-## How can I deploy this project?
+## Tech Stack
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+- **Frontend**: React 18, Vite, TypeScript, Tailwind CSS, Framer Motion
+- **UI**: shadcn/ui component library
+- **Backend**: Lovable Cloud (Supabase) — Auth, Database, Edge Functions
+- **Wallets**: Privy Server Wallets (multi-chain)
+- **AI Agent**: OpenClaw (self-hosted on DigitalOcean)
+- **AI Provider**: OpenRouter
+- **Payments**: x402 protocol for USDC micro-payments
+- **Commerce**: Shopify Storefront API
 
-## Can I connect a custom domain to my Lovable project?
+---
 
-Yes, you can!
+## Getting Started
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+### Prerequisites
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+- A [Privy](https://dashboard.privy.io) account (App ID + App Secret)
+- An [OpenRouter](https://openrouter.ai) API key
+- A DigitalOcean account (for OpenClaw hosting)
+
+### 1. Deploy OpenClaw
+
+Use the DigitalOcean 1-Click Droplet (4GB RAM recommended):
+
+👉 [How to Run OpenClaw on DigitalOcean](https://www.digitalocean.com/community/tutorials/how-to-run-openclaw)
+
+After deployment:
+- SSH in and configure your OpenRouter API key
+- Note your server's public IP (this becomes your webhook URL)
+
+### 2. Configure Privy
+
+1. Create an app at [dashboard.privy.io](https://dashboard.privy.io)
+2. Copy your **App ID** and **App Secret**
+3. Add them as secrets in the project backend
+
+### 3. Fund Testnet Wallets
+
+Grab test tokens from faucets:
+- **Base ETH**: [Coinbase Faucet](https://www.coinbase.com/faucets/base-ethereum-goerli-faucet)
+- **USDC**: [Circle Faucet](https://faucet.circle.com/)
+- **SOL**: [Solana Faucet](https://faucet.solana.com/)
+- **IP**: Story Foundation faucet
+
+### 4. Connect & Test
+
+1. Sign in with Google
+2. Complete onboarding (choose your dance role)
+3. Create agent wallets from the Wallet page
+4. Connect your OpenClaw instance from the Dashboard
+5. Chat with your agent and try a test tip!
+
+---
+
+## Project Structure
+
+```
+src/
+├── components/
+│   ├── dashboard/      # Dashboard UI (chat, sidebar, agent panel)
+│   ├── landing/        # Landing page sections
+│   ├── wallet/         # Wallet cards, create panel, send form
+│   └── ui/             # shadcn/ui components
+├── contexts/           # Auth context
+├── hooks/              # useAgentWallet, custom hooks
+├── lib/                # Utilities (openclaw-stream, utils)
+├── pages/              # Route pages
+└── integrations/       # Supabase client
+
+supabase/
+└── functions/          # Edge functions (agent-wallet, openclaw-chat, etc.)
+```
+
+---
+
+## License
+
+MIT
+
+---
+
+*Built with [Lovable](https://lovable.dev)*

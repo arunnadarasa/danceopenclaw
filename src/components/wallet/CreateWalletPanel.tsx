@@ -11,30 +11,58 @@ interface CreateWalletPanelProps {
   existingChains: string[];
 }
 
-const AVAILABLE_CHAINS = [
-  { key: "base_sepolia", label: "Base Sepolia", network: "testnet" as const },
-  { key: "solana_devnet", label: "Solana Devnet", network: "testnet" as const },
-  { key: "story_aeneid", label: "Story Aeneid", network: "testnet" as const },
-  { key: "base", label: "Base", network: "mainnet" as const },
-  { key: "solana", label: "Solana", network: "mainnet" as const },
-  { key: "story", label: "Story", network: "mainnet" as const },
+const CHAIN_FAMILIES = [
+  {
+    family: "Base",
+    icon: "Ξ",
+    colorClass: "bg-[hsl(var(--chain-eth))]",
+    chains: [
+      { key: "base_sepolia", network: "testnet" as const },
+      { key: "base", network: "mainnet" as const },
+    ],
+  },
+  {
+    family: "Solana",
+    icon: "◎",
+    colorClass: "bg-[hsl(var(--chain-sol))]",
+    chains: [
+      { key: "solana_devnet", network: "testnet" as const },
+      { key: "solana", network: "mainnet" as const },
+    ],
+  },
+  {
+    family: "Story",
+    icon: "📖",
+    colorClass: "bg-[hsl(var(--chain-story))]",
+    chains: [
+      { key: "story_aeneid", network: "testnet" as const },
+      { key: "story", network: "mainnet" as const },
+    ],
+  },
 ];
 
 export const CreateWalletPanel = ({ onCreateAll, onCreate, loading, existingChains }: CreateWalletPanelProps) => {
   const [creating, setCreating] = useState<string | null>(null);
 
-  const missingTestnets = AVAILABLE_CHAINS.filter(
-    (c) => c.network === "testnet" && !existingChains.includes(c.key)
-  );
-  const missingMainnets = AVAILABLE_CHAINS.filter(
-    (c) => c.network === "mainnet" && !existingChains.includes(c.key)
+  // Check which families are fully created (both testnet + mainnet exist)
+  const missingFamilies = CHAIN_FAMILIES.filter((f) =>
+    f.chains.some((c) => !existingChains.includes(c.key))
   );
 
-  const handleCreate = async (chain: string) => {
-    setCreating(chain);
+  const allMissing = CHAIN_FAMILIES.every((f) =>
+    f.chains.every((c) => !existingChains.includes(c.key))
+  );
+
+  const handleCreateFamily = async (family: typeof CHAIN_FAMILIES[number]) => {
+    setCreating(family.family);
     try {
-      await onCreate(chain);
-      toast({ title: "Wallet created", description: `Created wallet on ${chain}` });
+      // Create each missing chain in the family
+      for (const c of family.chains) {
+        if (!existingChains.includes(c.key)) {
+          await onCreate(c.key);
+        }
+      }
+      toast({ title: "Wallet created", description: `Created ${family.family} wallet` });
     } catch (err) {
       toast({ title: "Failed", description: err instanceof Error ? err.message : "Error", variant: "destructive" });
     } finally {
@@ -42,11 +70,12 @@ export const CreateWalletPanel = ({ onCreateAll, onCreate, loading, existingChai
     }
   };
 
-  const handleCreateAll = async (network: "testnet" | "mainnet") => {
-    setCreating(network);
+  const handleCreateAll = async () => {
+    setCreating("all");
     try {
-      await onCreateAll(network);
-      toast({ title: "Wallets created", description: `Created all ${network} wallets` });
+      await onCreateAll("testnet");
+      await onCreateAll("mainnet");
+      toast({ title: "All wallets created", description: "Created wallets for all chains" });
     } catch (err) {
       toast({ title: "Failed", description: err instanceof Error ? err.message : "Error", variant: "destructive" });
     } finally {
@@ -54,78 +83,51 @@ export const CreateWalletPanel = ({ onCreateAll, onCreate, loading, existingChai
     }
   };
 
-  if (missingTestnets.length === 0 && missingMainnets.length === 0) return null;
+  if (missingFamilies.length === 0) return null;
 
   return (
     <Card className="bg-gradient-card border-border/50 border-dashed">
       <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2 font-display text-lg">
-          <Plus className="h-5 w-5 text-accent" />
-          Create Wallets
+        <CardTitle className="flex items-center justify-between">
+          <span className="flex items-center gap-2 font-display text-lg">
+            <Plus className="h-5 w-5 text-accent" />
+            Create Wallets
+          </span>
+          {allMissing && (
+            <Button
+              variant="default"
+              size="sm"
+              disabled={loading}
+              onClick={handleCreateAll}
+            >
+              {creating === "all" ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
+              Create All Wallets
+            </Button>
+          )}
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
-        {missingTestnets.length > 0 && (
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-sm font-medium text-muted-foreground">Testnets</p>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={loading}
-                onClick={() => handleCreateAll("testnet")}
-              >
-                {creating === "testnet" ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
-                Create All Testnets
-              </Button>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {missingTestnets.map((c) => (
-                <Button
-                  key={c.key}
-                  variant="secondary"
-                  size="sm"
-                  disabled={loading}
-                  onClick={() => handleCreate(c.key)}
-                >
-                  {creating === c.key ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
-                  {c.label}
-                </Button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {missingMainnets.length > 0 && (
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-sm font-medium text-muted-foreground">Mainnets</p>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={loading}
-                onClick={() => handleCreateAll("mainnet")}
-              >
-                {creating === "mainnet" ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
-                Create All Mainnets
-              </Button>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {missingMainnets.map((c) => (
-                <Button
-                  key={c.key}
-                  variant="secondary"
-                  size="sm"
-                  disabled={loading}
-                  onClick={() => handleCreate(c.key)}
-                >
-                  {creating === c.key ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
-                  {c.label}
-                </Button>
-              ))}
-            </div>
-          </div>
-        )}
+      <CardContent>
+        <div className="flex flex-wrap gap-3">
+          {missingFamilies.map((f) => (
+            <Button
+              key={f.family}
+              variant="secondary"
+              size="sm"
+              disabled={loading}
+              onClick={() => handleCreateFamily(f)}
+              className="gap-2"
+            >
+              {creating === f.family ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <span className={`flex h-5 w-5 items-center justify-center rounded text-[10px] text-white ${f.colorClass}`}>
+                  {f.icon}
+                </span>
+              )}
+              {f.family}
+            </Button>
+          ))}
+        </div>
       </CardContent>
     </Card>
   );

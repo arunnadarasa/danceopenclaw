@@ -23,8 +23,8 @@ const steps = [
     step: "03",
     title: "Connect OpenClaw",
     description:
-      "Deploy OpenClaw on Railway, add your OpenRouter API key, then paste your webhook URL and token into the dashboard.",
-    link: { label: "OpenClaw Docs", url: "https://docs.openclaw.ai/install/railway" },
+      "Deploy OpenClaw on DigitalOcean using the 1-Click Droplet, add your OpenRouter API key, then paste your webhook URL and token into the dashboard.",
+    link: { label: "DigitalOcean Guide", url: "https://www.digitalocean.com/community/tutorials/how-to-run-openclaw" },
   },
   {
     icon: Rocket,
