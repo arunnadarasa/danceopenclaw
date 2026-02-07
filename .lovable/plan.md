@@ -1,42 +1,89 @@
 
 
-## Replace Quick Setup Guide with DigitalOcean Instructions
+## Upgrade OpenClaw Chat to Real-Time Streaming via WebSocket Bridge
 
 ### What
-Replace the current Railway-focused "Quick Setup Tips" section and related references in the OpenClaw Connection card with DigitalOcean-based guidance, matching the user's proven deployment workflow.
+Replace the current task-polling chat system with a real-time streaming approach. Instead of sending a message, creating a database task, and polling for completion, the new system opens a WebSocket connection to the user's OpenClaw server and streams the response token-by-token back to the browser via SSE (Server-Sent Events).
+
+This is the same architecture that worked in your other project, adapted to use each user's stored connection details (webhook URL + token) from the database.
+
+### Why
+- **Instant responses**: Tokens appear as the agent generates them instead of waiting for the full response
+- **No polling overhead**: Eliminates the 5-second polling interval and Realtime subscription for chat
+- **Proven approach**: This exact pattern worked in your other Lovable project
+- **Better UX**: Typing-indicator feel with real streamed text, plus markdown rendering
+
+### Architecture Change
+
+Current flow:
+```text
+Browser -> openclaw-proxy (HTTP POST) -> /hooks/agent -> DB task insert -> Poll DB for result
+```
+
+New flow:
+```text
+Browser -> openclaw-chat (HTTP POST) -> WebSocket to wss://user-ip/ws -> SSE stream back to browser
+```
 
 ### Changes
 
-**File: `src/components/dashboard/OpenClawConnectionCard.tsx`**
+#### 1. New Edge Function: `supabase/functions/openclaw-chat/index.ts`
 
-**1. Update the webhook URL placeholder and help text (lines 181-189)**
-- Change placeholder from `https://your-server.up.railway.app` to `https://your-droplet-ip`
-- Update the example URL from `https://clawdbot-production-xxxx.up.railway.app` to `https://178.xxx.xxx.xxx` (DigitalOcean Droplet IP style)
+A WebSocket-to-SSE bridge that:
+- Authenticates the user via their auth token
+- Reads the user's webhook URL and token from `openclaw_connections`
+- Converts the HTTP URL to a WebSocket URL (e.g., `https://178.x.x.x` becomes `wss://178.x.x.x/ws`)
+- Opens a WebSocket, authenticates with the OpenClaw protocol, sends the chat message
+- Streams agent response deltas back as SSE events in OpenAI-compatible format
+- Handles lifecycle events (end of response), timeouts (60s), and errors
 
-**2. Update the setup docs link (lines 231-238)**
-- Change URL from `https://docs.openclaw.ai/install/railway` to `https://www.digitalocean.com/community/tutorials/how-to-run-openclaw`
-- Change label from "OpenClaw setup docs" to "DigitalOcean setup guide"
+This does NOT require the `OPENCLAW_GATEWAY_TOKEN` secret since it reads each user's token from the database.
 
-**3. Replace the entire Quick Setup Tips section (lines 240-270)**
+#### 2. New Streaming Utility: `src/lib/openclaw-stream.ts`
 
-Remove the three Railway-specific tips (Hosting, AI Key, Port) and replace with DigitalOcean-relevant tips:
+Frontend utility that:
+- Calls the `openclaw-chat` edge function via fetch
+- Parses the SSE response line-by-line
+- Calls `onDelta` for each token chunk as it arrives
+- Handles `[DONE]`, errors, and buffer edge cases
 
-| Tip Label | Content |
-|-----------|---------|
-| **Deploy** | Use DigitalOcean's 1-Click OpenClaw Droplet (4 GB RAM, ~$24/month). Go to Create Droplet, select the Marketplace tab, search "OpenClaw", and launch. |
-| **AI Key** | SSH into your Droplet, choose your AI provider (Anthropic, Gradient AI), and enter your API key when prompted during setup. |
-| **Pairing** | In the Droplet console, run the pairing automation and open the provided URL in your browser to access the OpenClaw dashboard. Copy your Droplet IP as the webhook URL above. |
-| **Security** | The 1-Click deploy includes authenticated communication, hardened firewall rules, Docker isolation, and non-root execution out of the box. |
+#### 3. Updated Chat Widget: `src/components/dashboard/OpenClawChat.tsx`
 
-**4. Update the diagnostic error text (line 173)**
-- Change "Check your Railway/server logs" to "Check your server/Droplet console logs"
+Replace the task-based polling approach with streaming:
+- Remove `pendingTaskIds`, Realtime subscription, and polling logic
+- Add `streamChat()` integration with `onDelta` callbacks
+- Stream tokens into the assistant message progressively (update last message content)
+- Show a "Thinking..." indicator only until the first token arrives
+- Render agent responses with markdown support using `react-markdown`
+- Add `isStreaming` state for the blinking cursor effect
 
-### Why
-- The user successfully deployed on DigitalOcean and confirmed it works
-- DigitalOcean's 1-Click Application handles security (firewall, Docker isolation, auth tokens) automatically -- simpler than Railway
-- No port configuration needed (unlike Railway's 3000-to-8080 issue)
-- The setup guide should reflect the recommended and tested deployment path
+#### 4. Update `supabase/config.toml`
+
+Add the new function entry:
+```text
+[functions.openclaw-chat]
+verify_jwt = false
+```
+
+### What Stays the Same
+- **Connection card** (`OpenClawConnectionCard.tsx`): No changes -- users still configure webhook URL + token the same way
+- **Existing edge functions** (`openclaw-proxy`, `openclaw-status`, `openclaw-register`): Kept for backward compatibility and health checks
+- **Agent task panel** (`AgentTaskPanel.tsx`): Unchanged -- still shows task history
+- **Database tables**: No schema changes needed
+
+### New Dependencies
+- `react-markdown` -- for rendering agent responses with proper formatting
+- `remark-gfm` -- GitHub Flavored Markdown support (tables, strikethrough, etc.)
+
+### Files Created
+| File | Purpose |
+|------|---------|
+| `supabase/functions/openclaw-chat/index.ts` | WebSocket-to-SSE bridge edge function |
+| `src/lib/openclaw-stream.ts` | Frontend SSE streaming utility |
 
 ### Files Modified
-- `src/components/dashboard/OpenClawConnectionCard.tsx`
+| File | Change |
+|------|--------|
+| `src/components/dashboard/OpenClawChat.tsx` | Replace polling with streaming, add markdown rendering |
+| `supabase/config.toml` | Add `openclaw-chat` function entry |
 
