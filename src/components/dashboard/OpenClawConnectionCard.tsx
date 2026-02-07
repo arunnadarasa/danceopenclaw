@@ -170,7 +170,7 @@ export const OpenClawConnectionCard = () => {
               <p className="text-xs font-mono break-all">{pingDetail}</p>
               <p className="text-xs text-muted-foreground mt-1">
                 This usually means your server is crashing on startup or the endpoint path is incorrect.
-                Check your Railway/server logs and environment variables (API keys, tokens).
+                Check your server/Droplet console logs and environment variables (API keys, tokens).
               </p>
             </AlertDescription>
           </Alert>
@@ -179,13 +179,13 @@ export const OpenClawConnectionCard = () => {
         <div className="space-y-2">
           <label className="text-sm font-medium">Webhook URL</label>
           <Input
-            placeholder="https://your-server.up.railway.app"
+            placeholder="https://your-droplet-ip"
             value={webhookUrl}
             onChange={(e) => setWebhookUrl(e.target.value)}
           />
           <p className="text-xs text-muted-foreground flex items-start gap-1">
             <Info className="h-3 w-3 mt-0.5 shrink-0" />
-            The base URL of your OpenClaw instance (e.g. <code className="text-xs">https://clawdbot-production-xxxx.up.railway.app</code>). Do not include path suffixes like /hooks/wake.
+            The base URL of your OpenClaw instance (e.g. <code className="text-xs">https://178.xxx.xxx.xxx</code>). Do not include path suffixes like /hooks/wake.
           </p>
         </div>
         <div className="space-y-2">
@@ -229,12 +229,12 @@ export const OpenClawConnectionCard = () => {
         )}
 
         <a
-          href="https://docs.openclaw.ai/install/railway"
+          href="https://www.digitalocean.com/community/tutorials/how-to-run-openclaw"
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
         >
-          OpenClaw setup docs <ExternalLink className="h-3 w-3" />
+          DigitalOcean setup guide <ExternalLink className="h-3 w-3" />
         </a>
 
         {/* Quick Setup Tips */}
@@ -242,29 +242,30 @@ export const OpenClawConnectionCard = () => {
           <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Quick Setup Tips</p>
           <div className="space-y-2">
             <div className="flex items-start gap-2">
-              <span className="mt-0.5 text-xs font-medium text-primary">Hosting</span>
+              <span className="mt-0.5 text-xs font-medium text-primary">Deploy</span>
               <p className="text-xs text-muted-foreground">
-                We recommend{" "}
-                <a href="https://railway.com" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Railway</a>{" "}
-                (Hobby Plan, $5/month). Set a <strong className="text-foreground">$10 hard usage limit</strong> and a{" "}
-                <strong className="text-foreground">$5 custom email alert</strong> to control costs.
+                Use{" "}
+                <a href="https://marketplace.digitalocean.com" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">DigitalOcean's 1-Click OpenClaw Droplet</a>{" "}
+                (4 GB RAM, ~$24/month). Go to Create Droplet, select the <strong className="text-foreground">Marketplace</strong> tab, search "OpenClaw", and launch.
               </p>
             </div>
             <div className="flex items-start gap-2">
               <span className="mt-0.5 text-xs font-medium text-primary">AI Key</span>
               <p className="text-xs text-muted-foreground">
-                Use{" "}
-                <a href="https://openrouter.ai" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">OpenRouter</a>{" "}
-                for your AI model key (set as <code className="rounded bg-muted px-1 text-[11px]">OPENROUTER_API_KEY</code> in Railway).
-                Sign up and grab a free key to get started.
+                SSH into your Droplet, choose your AI provider (Anthropic, Gradient AI), and enter your API key when prompted during setup.
               </p>
             </div>
             <div className="flex items-start gap-2">
-              <span className="mt-0.5 text-xs font-medium text-primary">Port</span>
+              <span className="mt-0.5 text-xs font-medium text-primary">Pairing</span>
               <p className="text-xs text-muted-foreground">
-                In Railway, go to Settings → Networking → Public Networking and change the port
-                from <strong className="text-foreground">3000</strong> to <strong className="text-foreground">8080</strong>.
-                OpenClaw listens on port 8080 by default — using the wrong port will prevent connections.
+                In the Droplet console, run the pairing automation and open the provided URL in your browser to access the OpenClaw dashboard.
+                Copy your <strong className="text-foreground">Droplet IP</strong> as the webhook URL above.
+              </p>
+            </div>
+            <div className="flex items-start gap-2">
+              <span className="mt-0.5 text-xs font-medium text-primary">Security</span>
+              <p className="text-xs text-muted-foreground">
+                The 1-Click deploy includes authenticated communication, hardened firewall rules, Docker isolation, and non-root execution out of the box.
               </p>
             </div>
           </div>
