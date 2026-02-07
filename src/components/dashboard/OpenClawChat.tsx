@@ -1,31 +1,23 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { MessageCircle, X, Send, Loader2 } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { Button } from "@/components/ui/button";
-import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
+import { streamChat, type ChatMessage as StreamMessage } from "@/lib/openclaw-stream";
 
 interface ChatMessage {
-  role: "user" | "agent";
+  role: "user" | "assistant";
   content: string;
-  timestamp: Date;
-  taskId?: string;
 }
 
 export const OpenClawChat = () => {
-  const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
-  const [pendingTaskIds, setPendingTaskIds] = useState<Set<string>>(new Set());
-  const [sending, setSending] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isStreaming, setIsStreaming] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const pendingRef = useRef<Set<string>>(pendingTaskIds);
-
-  // Keep ref in sync with state
-  useEffect(() => {
-    pendingRef.current = pendingTaskIds;
-  }, [pendingTaskIds]);
 
   const scrollToBottom = useCallback(() => {
     requestAnimationFrame(() => {
@@ -39,152 +31,61 @@ export const OpenClawChat = () => {
     scrollToBottom();
   }, [messages, open, scrollToBottom]);
 
-  // Helper to process a completed/failed task
-  const processTaskUpdate = useCallback(
-    (task: { id: string; status: string; response: unknown; error_message: string | null }) => {
-      if (!pendingRef.current.has(task.id)) return;
-
-      if (task.status === "completed") {
-        let content = "Task completed.";
-        if (task.response) {
-          const res = task.response as Record<string, unknown>;
-          content =
-            (res.result as string) ||
-            (res.response as string) ||
-            (res.output as string) ||
-            JSON.stringify(task.response);
-        }
-        setMessages((prev) => [
-          ...prev,
-          { role: "agent", content, timestamp: new Date(), taskId: task.id },
-        ]);
-        setPendingTaskIds((prev) => {
-          const next = new Set(prev);
-          next.delete(task.id);
-          return next;
-        });
-      } else if (task.status === "failed") {
-        setMessages((prev) => [
-          ...prev,
-          {
-            role: "agent",
-            content: task.error_message || "Something went wrong.",
-            timestamp: new Date(),
-            taskId: task.id,
-          },
-        ]);
-        setPendingTaskIds((prev) => {
-          const next = new Set(prev);
-          next.delete(task.id);
-          return next;
-        });
-      }
-    },
-    []
-  );
-
-  // Stable Realtime subscription — depends only on user
-  useEffect(() => {
-    if (!user) return;
-
-    const channel = supabase
-      .channel("chat-task-updates")
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "agent_tasks",
-          filter: `user_id=eq.${user.id}`,
-        },
-        (payload) => {
-          const task = payload.new as {
-            id: string;
-            status: string;
-            response: unknown;
-            error_message: string | null;
-          };
-          processTaskUpdate(task);
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [user, processTaskUpdate]);
-
-  // Polling fallback — runs when there are pending tasks
-  useEffect(() => {
-    if (pendingTaskIds.size === 0) return;
-
-    const interval = setInterval(async () => {
-      const ids = Array.from(pendingRef.current);
-      if (ids.length === 0) return;
-
-      const { data } = await supabase
-        .from("agent_tasks")
-        .select("id, status, response, error_message")
-        .in("id", ids);
-
-      if (data) {
-        for (const task of data) {
-          if (task.status === "completed" || task.status === "failed") {
-            processTaskUpdate(task);
-          }
-        }
-      }
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, [pendingTaskIds.size > 0, processTaskUpdate]);
-
   const handleSend = async () => {
     const trimmed = input.trim();
-    if (!trimmed || sending) return;
+    if (!trimmed || isLoading) return;
 
     setInput("");
-    setSending(true);
+    setIsLoading(true);
+    setIsStreaming(false);
 
-    setMessages((prev) => [
-      ...prev,
-      { role: "user", content: trimmed, timestamp: new Date() },
-    ]);
+    const userMsg: ChatMessage = { role: "user", content: trimmed };
+    const updatedMessages = [...messages, userMsg];
+    setMessages(updatedMessages);
+
+    let assistantContent = "";
 
     try {
-      const { data, error } = await supabase.functions.invoke("openclaw-proxy", {
-        body: { taskType: "chat", message: trimmed },
+      await streamChat({
+        messages: updatedMessages.map((m) => ({
+          role: m.role,
+          content: m.content,
+        })) as StreamMessage[],
+        onDelta: (chunk) => {
+          if (!isStreaming) setIsStreaming(true);
+          assistantContent += chunk;
+          setMessages((prev) => {
+            const last = prev[prev.length - 1];
+            if (last?.role === "assistant") {
+              return prev.map((m, i) =>
+                i === prev.length - 1 ? { ...m, content: assistantContent } : m
+              );
+            }
+            return [...prev, { role: "assistant", content: assistantContent }];
+          });
+        },
+        onDone: () => {
+          setIsLoading(false);
+          setIsStreaming(false);
+        },
+        onError: (error) => {
+          setIsLoading(false);
+          setIsStreaming(false);
+          setMessages((prev) => [
+            ...prev,
+            { role: "assistant", content: `Error: ${error}` },
+          ]);
+        },
       });
-
-      if (error) {
-        // Show proxy error immediately in chat
-        let errorMsg = error.message;
-        try {
-          const body = JSON.parse(error.message);
-          if (body?.error) errorMsg = body.error;
-        } catch {}
-        setMessages((prev) => [
-          ...prev,
-          { role: "agent", content: `Error: ${errorMsg}`, timestamp: new Date() },
-        ]);
-      } else if (data?.taskId) {
-        setPendingTaskIds((prev) => new Set(prev).add(data.taskId));
-      }
-    } catch (err) {
+    } catch {
+      setIsLoading(false);
+      setIsStreaming(false);
       setMessages((prev) => [
         ...prev,
-        {
-          role: "agent",
-          content: "Failed to send message. Please try again.",
-          timestamp: new Date(),
-        },
+        { role: "assistant", content: "Failed to connect. Please try again." },
       ]);
-    } finally {
-      setSending(false);
     }
   };
-
-  const isWaiting = pendingTaskIds.size > 0;
 
   return (
     <>
@@ -254,19 +155,30 @@ export const OpenClawChat = () => {
                   className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
                 >
                   <div
-                    className={`max-w-[80%] rounded-xl px-3 py-2 text-sm whitespace-pre-wrap ${
+                    className={`max-w-[80%] rounded-xl px-3 py-2 text-sm ${
                       msg.role === "user"
-                        ? "bg-primary text-primary-foreground rounded-br-sm"
+                        ? "bg-primary text-primary-foreground rounded-br-sm whitespace-pre-wrap"
                         : "bg-muted text-foreground rounded-bl-sm"
                     }`}
                   >
-                    {msg.content}
+                    {msg.role === "user" ? (
+                      msg.content
+                    ) : (
+                      <div className="prose prose-sm prose-invert max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                          {msg.content}
+                        </ReactMarkdown>
+                        {isStreaming && i === messages.length - 1 && (
+                          <span className="inline-block w-2 h-4 bg-primary animate-pulse ml-0.5 align-text-bottom" />
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
 
-              {/* Typing indicator */}
-              {isWaiting && (
+              {/* Thinking indicator — shows until first token arrives */}
+              {isLoading && !isStreaming && (
                 <div className="flex justify-start">
                   <div className="bg-muted text-muted-foreground rounded-xl rounded-bl-sm px-3 py-2 text-sm flex items-center gap-2">
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -291,13 +203,13 @@ export const OpenClawChat = () => {
                   onChange={(e) => setInput(e.target.value)}
                   placeholder="Type a message…"
                   className="flex-1 rounded-lg border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  disabled={sending}
+                  disabled={isLoading}
                 />
                 <Button
                   type="submit"
                   size="icon"
                   className="h-9 w-9 shrink-0"
-                  disabled={!input.trim() || sending}
+                  disabled={!input.trim() || isLoading}
                 >
                   <Send className="h-4 w-4" />
                 </Button>
