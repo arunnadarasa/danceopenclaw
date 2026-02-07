@@ -1,81 +1,54 @@
 
 
-## Fix Agent Diagram: Precise Node Alignment on Mobile
+## Fix Agent Diagram: Per-Node Corner Alignment
 
 ### Problem
-Two issues visible in the mobile screenshot:
+All three nodes currently use identical centering (`-translate-x-1/2 -translate-y-1/2`), but each node needs to touch its triangle corner from a different direction:
 
-1. **Emoji boxes misaligned from triangle corners**: The CSS `translate-y: -50%` centers the entire node div (emoji box + gap + label text, totaling ~80px) at the triangle vertex. But the *emoji box center* is 28px from the div top, while the div center is 40px -- creating a ~12px offset. The emoji box sits below the top vertex and above the bottom vertices.
-
-2. **Right-side clipping**: The "Organiser Agent" label at x=80% extends beyond the container on narrow mobile screens and gets clipped.
+- **Fan Agent** (bottom-left): The box should have its **top-right corner** touching the triangle vertex -- so the box sits below-left of the corner
+- **Dancer Agent** (top): The box should sit **above** the vertex with the label text appearing just below the vertex, centered at the top of the triangle
+- **Organiser Agent** (bottom-right): Already looks perfect with center alignment -- no change needed
 
 ### Solution
 
-**Restructure the node layout** so that only the emoji box determines the positioned height. Move the label to `position: absolute` so it doesn't contribute to the parent's height calculation. This way, `-translate-y-1/2` shifts by exactly half the emoji box height (~28px), placing the emoji center precisely at the triangle vertex.
+Add per-node alignment configuration to control which part of the box anchors to the triangle vertex. Each node gets a custom CSS transform class:
 
-**Add overflow-visible** to the diagram container so labels can extend beyond the container bounds without clipping.
+```text
+Dancer (top vertex):
+  Before: box centered on vertex
+  After:  box above vertex, label at vertex top
+  Transform: -translate-x-1/2  -translate-y-full
+
+Fan (bottom-left vertex):
+  Before: box centered on vertex
+  After:  box below-left, top-right corner at vertex
+  Transform: -translate-x-full  (no y translate)
+
+Organiser (bottom-right vertex):
+  No change: -translate-x-1/2  -translate-y-1/2
+```
 
 ### Changes (single file: `src/components/landing/AgentDiagram.tsx`)
 
-**1. Add `overflow-visible` to the diagram container**
+**1. Add per-node alignment class to the nodes array**
 
-Change the container class to include `overflow-visible` so the node labels (especially "Organiser Agent" at the right edge) don't get clipped on narrow screens:
+Add a `className` property to each node definition:
 
-```
-<div className="relative mx-auto mt-16 aspect-square max-w-sm sm:max-w-md overflow-visible">
-```
+- Dancer Agent: `"-translate-x-1/2 -translate-y-full"` -- centers horizontally, pushes box fully above the point so bottom-center edge sits at the vertex; label appears at the vertex (top of triangle)
+- Fan Agent: `"-translate-x-full"` -- pushes box fully to the left so right edge is at the vertex; top-right corner touches the triangle corner
+- Organiser Agent: `"-translate-x-1/2 -translate-y-1/2"` -- keep existing centered behavior (confirmed perfect)
 
-**2. Restructure the node markup**
+**2. Use per-node className in the motion.div**
 
-Currently the node is a flex column where both the emoji box and label contribute to the div height:
-
-```text
-+-------------------+
-|    [emoji box]    |   <-- these two together = ~80px height
-|      label        |   <-- translate-y: -50% shifts by 40px
-+-------------------+
-```
-
-Change to: make the label `absolute` so only the emoji box determines the div height:
-
-```text
-+-------------------+
-|    [emoji box]    |   <-- only this = ~56px height
-+-------------------+   <-- translate-y: -50% shifts by 28px (correct!)
-      label            <-- absolute, positioned below, outside height calc
-```
-
-The updated node JSX:
+Replace the fixed class `className="absolute -translate-x-1/2 -translate-y-1/2"` with the node-specific transform class:
 
 ```tsx
-<motion.div
-  key={node.label}
-  className="absolute -translate-x-1/2 -translate-y-1/2"
-  style={{ left: node.x, top: node.y }}
-  ...
->
-  <div className="relative flex flex-col items-center">
-    <div className="flex h-14 w-14 sm:h-16 sm:w-16 items-center justify-center rounded-2xl border border-border bg-card shadow-lg animate-float" ...>
-      <span className="text-xl sm:text-2xl">{node.emoji}</span>
-    </div>
-    <span className="absolute top-full mt-1 text-xs sm:text-sm font-semibold whitespace-nowrap">
-      {node.label}
-    </span>
-  </div>
-</motion.div>
+className={`absolute ${node.className}`}
 ```
-
-The key change is `absolute top-full mt-1` on the label span -- this positions it just below the emoji box without contributing to the parent's height, so the translate operation only accounts for the emoji box dimensions.
-
-### Why This Fixes It
-
-- The `-translate-y-1/2` now shifts by half of only the emoji box height (~28px on mobile), not half of the entire node (~40px). This places the emoji box center exactly at the triangle vertex coordinates.
-- `overflow-visible` prevents clipping of labels that extend beyond the container edges on narrow screens.
-- No change to the node coordinates or SVG geometry needed -- the existing values (19%, 77.5%) already match the SVG vertices correctly.
 
 ### Technical Summary
 
 Single file: `src/components/landing/AgentDiagram.tsx`
-- Line 24: Add `overflow-visible` to the diagram container class
-- Lines 89-97: Restructure node markup so the label is `position: absolute` with `top-full`, removing it from the height calculation used by `translate-y`
+- Lines 3-7: Add `className` property to each node in the array
+- Line 82: Use `node.className` instead of hardcoded translate classes
 
