@@ -1,34 +1,24 @@
 
 
-## Fix Proxy Timeout Mismatch (Cause of 499 Errors)
+## Add Port Configuration Tip to Dashboard
 
-### Root Cause
-The 499 status code means "client closed connection before server responded." This is happening because:
+### What
+Add a prominent tip in the OpenClaw Connection card's "Quick Setup Tips" section emphasizing that users must change the Railway networking port from the default 3000 to **8080**. This is a common setup mistake -- Railway defaults to port 3000 but OpenClaw listens on 8080.
 
-1. The proxy tells OpenClaw `timeoutSeconds: 120` (work for up to 2 minutes)
-2. But the edge function itself aborts after 30 seconds (`AbortSignal.timeout(30000)`)
-3. OpenClaw starts a 120-second agent run, but the caller hangs up at 30s -- OpenClaw logs this as 499
+### Where
+**File: `src/components/dashboard/OpenClawConnectionCard.tsx`**
 
-Additionally, the proxy is missing `wakeMode: "now"`, which the docs say is needed to trigger an immediate agent wake (critical for Railway cold starts).
+Add a new tip entry in the "Quick Setup Tips" section (after the existing "Hosting" and "AI Key" tips, around line 261), styled consistently with the other tips:
 
-### Changes
+```text
+Port    In Railway, go to Settings -> Networking -> Public Networking and change the port
+        from 3000 to 8080. OpenClaw listens on port 8080 by default -- using the wrong port
+        will prevent connections.
+```
 
-**File: `supabase/functions/openclaw-proxy/index.ts`**
+The word "Port" will be the label (styled in primary color like "Hosting" and "AI Key"), and the key values **3000** and **8080** will be bolded to draw attention. This follows the exact same layout pattern as the existing tips.
 
-Update the request body sent to `/hooks/agent` (lines 112-118):
-
-| Field | Before | After | Why |
-|-------|--------|-------|-----|
-| `wakeMode` | missing | `"now"` | Forces immediate agent wake instead of waiting for next heartbeat (per docs, default is `"now"` but being explicit avoids ambiguity) |
-| `timeoutSeconds` | `120` | `25` | Must be less than the edge function's 30s abort -- gives 5s margin so OpenClaw finishes before the caller disconnects |
-
-No other files need changes -- the health-check endpoints were already fixed in the previous update, and the `/hooks/agent` schema (message, sessionKey, deliver) matches the docs.
-
-### What This Fixes
-- **499 errors**: OpenClaw will finish within 25s, before the edge function's 30s abort fires
-- **Cold start hangs**: `wakeMode: "now"` ensures Railway servers wake immediately
-- The `/hooks/agent` endpoint returns 202 (accepted), and the existing `openclawRes.ok` check already handles both 200 and 202 correctly
-
-### Files Modified
-- `supabase/functions/openclaw-proxy/index.ts` -- add `wakeMode: "now"`, change `timeoutSeconds` from 120 to 25
-
+### Why
+- The uploaded Railway screenshot confirms OpenClaw uses port 8080
+- The OpenClaw docs checklist explicitly says "Enable HTTP Proxy on port 8080"
+- This is a common first-time setup pitfall that causes connection failures
