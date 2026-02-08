@@ -66,7 +66,15 @@ const Payments = () => {
   const { user } = useAuth();
   const { executePayment, loading, error, lastResult } = useX402Payment();
 
-  const [targetUrl, setTargetUrl] = useState("https://x402.org/api/weather");
+  const DEFAULT_URLS: Record<string, string> = {
+    testnet: "https://x402.payai.network/api/base-sepolia/paid-content",
+    mainnet: "https://x402.payai.network/api/base/paid-content",
+    "story-mainnet": "https://storyx402.lovable.app/",
+    "solana-testnet": "https://x402.payai.network/api/solana-devnet/paid-content",
+    "solana-mainnet": "https://x402.payai.network/api/solana/paid-content",
+  };
+
+  const [targetUrl, setTargetUrl] = useState(DEFAULT_URLS["testnet"]);
   const [network, setNetwork] = useState<X402PaymentParams["network"]>("testnet");
   const [maxAmount, setMaxAmount] = useState("1.00");
   const [agentId, setAgentId] = useState<string | null>(null);
@@ -153,7 +161,14 @@ const Payments = () => {
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Network</label>
-              <Select value={network} onValueChange={(v) => setNetwork(v as X402PaymentParams["network"])}>
+              <Select value={network} onValueChange={(v) => {
+                  const newNetwork = v as X402PaymentParams["network"];
+                  setNetwork(newNetwork);
+                  const isDefault = Object.values(DEFAULT_URLS).includes(targetUrl);
+                  if (isDefault) {
+                    setTargetUrl(DEFAULT_URLS[v] || targetUrl);
+                  }
+                }}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
