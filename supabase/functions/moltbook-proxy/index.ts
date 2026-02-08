@@ -64,10 +64,29 @@ Deno.serve(async (req) => {
 
     // --- REGISTER ---
     if (action === "register") {
-      const { agentName, agentDescription } = data;
+      let { agentName, agentDescription } = data;
       if (!agentName || !agentDescription) {
         return new Response(
           JSON.stringify({ error: "agentName and agentDescription required" }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      // Sanitize agent name: only alphanumeric, underscores, hyphens; 3-30 chars
+      agentName = String(agentName)
+        .replace(/\s+/g, "_")
+        .replace(/[^a-zA-Z0-9_-]/g, "")
+        .slice(0, 30);
+
+      if (agentName.length < 3) {
+        return new Response(
+          JSON.stringify({
+            error: "Invalid agent name format",
+            hint: "Name must be 3-30 characters, alphanumeric with underscores/hyphens",
+          }),
           {
             status: 400,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
