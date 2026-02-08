@@ -23,6 +23,9 @@ import {
   ArrowUp,
   Loader2,
   Unplug,
+  Twitter,
+  Copy,
+  Check,
 } from "lucide-react";
 
 interface MoltbookConnection {
@@ -30,6 +33,7 @@ interface MoltbookConnection {
   moltbook_agent_name: string;
   claim_url: string | null;
   claim_status: string;
+  verification_code: string | null;
 }
 
 interface FeedPost {
@@ -87,6 +91,7 @@ export default function MoltbookPage() {
   const [registering, setRegistering] = useState(false);
   const [checkingStatus, setCheckingStatus] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
+  const [codeCopied, setCodeCopied] = useState(false);
 
   // Feed state
   const [feed, setFeed] = useState<FeedPost[]>([]);
@@ -109,17 +114,15 @@ export default function MoltbookPage() {
     const loadData = async () => {
       setLoading(true);
       try {
-        // Check for existing connection (table may not be in generated types yet)
         const { data: conn } = await (supabase as any)
           .from("moltbook_connections")
-          .select("id, moltbook_agent_name, claim_url, claim_status")
+          .select("id, moltbook_agent_name, claim_url, claim_status, verification_code")
           .eq("user_id", user.id)
           .maybeSingle();
 
         setConnection(conn as MoltbookConnection | null);
 
         if (!conn) {
-          // Pre-fill agent name and role-based description
           const { data: agent } = await supabase
             .from("agents")
             .select("name")
@@ -127,7 +130,6 @@ export default function MoltbookPage() {
             .single();
 
           if (agent) {
-            // Sanitize: only alphanumeric, underscores, hyphens; 3-30 chars
             const sanitized = agent.name
               .replace(/\s+/g, "_")
               .replace(/[^a-zA-Z0-9_-]/g, "")
@@ -171,20 +173,34 @@ export default function MoltbookPage() {
         agentName,
         agentDescription,
       });
+
+      const finalName = result.agentName || agentName;
+
       setConnection({
         id: "",
-        moltbook_agent_name: agentName,
-        claim_url: result.claimUrl,
+        moltbook_agent_name: finalName,
+        claim_url: result.claimUrl || null,
         claim_status: "pending_claim",
+        verification_code: result.verificationCode || null,
       });
-      toast({
-        title: "Registered on Moltbook!",
-        description: "Claim your agent via the link to activate it.",
-      });
+
+      if (result.nameChanged) {
+        toast({
+          title: "Registered on Moltbook!",
+          description: `"${result.originalName}" was taken, so we registered as "${finalName}". Claim your agent to activate it.`,
+        });
+      } else {
+        toast({
+          title: "Registered on Moltbook!",
+          description: "Claim your agent via X/Twitter to activate it.",
+        });
+      }
     } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      // Check if the error body contains nameTaken info
       toast({
         title: "Registration failed",
-        description: err instanceof Error ? err.message : "Unknown error",
+        description: msg,
         variant: "destructive",
       });
     } finally {
@@ -279,6 +295,22 @@ export default function MoltbookPage() {
     }
   };
 
+  const copyVerificationCode = () => {
+    if (connection?.verification_code) {
+      navigator.clipboard.writeText(connection.verification_code);
+      setCodeCopied(true);
+      setTimeout(() => setCodeCopied(false), 2000);
+    }
+  };
+
+  const openPostToX = () => {
+    const code = connection?.verification_code || "";
+    const tweetText = encodeURIComponent(
+      `Claiming my Moltbook agent 🦞\n\nVerification: ${code}`
+    );
+    window.open(`https://twitter.com/intent/tweet?text=${tweetText}`, "_blank");
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -363,22 +395,68 @@ export default function MoltbookPage() {
       </div>
 
       {/* Claim section */}
-      {!isClaimed && connection.claim_url && (
+      {!isClaimed && (
         <Card>
-          <CardContent className="pt-6 space-y-3">
-            <p className="text-sm font-medium">Claim your agent to activate it:</p>
-            <a
-              href={connection.claim_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-sm text-primary underline underline-offset-4"
-            >
-              {connection.claim_url}
-              <ExternalLink className="h-3 w-3" />
-            </a>
+          <CardHeader>
+            <CardTitle className="text-lg">Claim Your Agent</CardTitle>
+            <CardDescription>
+              Post a verification tweet on X/Twitter to prove you own this agent and activate it on Moltbook.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Verification code */}
+            {connection.verification_code && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Your Verification Code</label>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 rounded-md border bg-muted px-3 py-2 text-sm font-mono">
+                    {connection.verification_code}
+                  </code>
+                  <Button variant="outline" size="icon" onClick={copyVerificationCode}>
+                    {codeCopied ? (
+                      <Check className="h-4 w-4 text-primary" />
+                    ) : (
+                      <Copy className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Post to X button */}
+            <Button onClick={openPostToX} className="w-full gap-2">
+              <Twitter className="h-4 w-4" />
+              Post Verification to X
+            </Button>
+
+            {/* Profile and claim links */}
+            <div className="flex flex-col gap-2 text-sm">
+              <a
+                href={`https://www.moltbook.com/u/${connection.moltbook_agent_name}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-primary underline underline-offset-4"
+              >
+                View profile on Moltbook
+                <ExternalLink className="h-3 w-3" />
+              </a>
+              {connection.claim_url && (
+                <a
+                  href={connection.claim_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-muted-foreground underline underline-offset-4"
+                >
+                  Direct claim link
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              )}
+            </div>
+
             <p className="text-xs text-muted-foreground">
-              Post a verification tweet to activate your agent on Moltbook.
+              After posting the tweet, click "Check Status" below. It may take a moment for Moltbook to verify.
             </p>
+
             <div className="flex gap-2">
               <Button
                 variant="outline"

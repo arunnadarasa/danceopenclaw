@@ -8,6 +8,26 @@ const corsHeaders = {
 
 const MOLTBOOK_BASE = "https://www.moltbook.com/api/v1";
 
+/** Try to register an agent name on Moltbook. Returns the parsed JSON + ok flag. */
+async function tryRegister(name: string, description: string) {
+  const res = await fetch(`${MOLTBOOK_BASE}/agents/register`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, description }),
+  });
+  const data = await res.json();
+  return { ok: res.ok, status: res.status, data };
+}
+
+/** Extract credentials from the Moltbook registration response (handles nested `agent` object). */
+function extractCredentials(mbData: Record<string, any>) {
+  const agentObj = mbData.agent || {};
+  const apiKey = agentObj.api_key || mbData.api_key || mbData.apiKey;
+  const claimUrl = agentObj.claim_url || mbData.claim_url || mbData.claimUrl;
+  const verificationCode = agentObj.verification_code || mbData.verification_code;
+  return { apiKey, claimUrl, verificationCode };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -75,7 +95,7 @@ Deno.serve(async (req) => {
         );
       }
 
-      // Sanitize agent name: only alphanumeric, underscores, hyphens; 3-30 chars
+      // Sanitize agent name
       agentName = String(agentName)
         .replace(/\s+/g, "_")
         .replace(/[^a-zA-Z0-9_-]/g, "")
@@ -94,35 +114,46 @@ Deno.serve(async (req) => {
         );
       }
 
-      // Call Moltbook register
-      const mbRes = await fetch(`${MOLTBOOK_BASE}/agents/register`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: agentName,
-          description: agentDescription,
-        }),
-      });
+      // Try registration, with up to 3 retries on 409 "name taken"
+      let result = await tryRegister(agentName, agentDescription);
+      let finalName = agentName;
 
-      const mbData = await mbRes.json();
-      if (!mbRes.ok) {
+      if (!result.ok && result.status === 409) {
+        // Name taken — try variants
+        for (let i = 1; i <= 3; i++) {
+          const variant = `${agentName}_${i}`.slice(0, 30);
+          console.log(`Name "${finalName}" taken, trying "${variant}"...`);
+          result = await tryRegister(variant, agentDescription);
+          if (result.ok) {
+            finalName = variant;
+            break;
+          }
+          if (result.status !== 409) break; // different error, stop
+        }
+      }
+
+      const mbData = result.data;
+
+      if (!result.ok) {
+        // All retries failed
+        const suggestions = [1, 2, 3].map((i) => `${agentName}_${i}`);
         return new Response(
           JSON.stringify({
             error: mbData.error || mbData.message || "Moltbook registration failed",
             details: mbData,
+            suggestions,
+            nameTaken: result.status === 409,
           }),
           {
-            status: mbRes.status,
+            status: result.status,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           }
         );
       }
 
-      // Store credentials — log full response to identify field names
       console.log("Moltbook registration response:", JSON.stringify(mbData));
 
-      const apiKey = mbData.api_key || mbData.apiKey || mbData.key || mbData.token || mbData.access_token;
-      const claimUrl = mbData.claim_url || mbData.claimUrl || mbData.claim || mbData.verification_url;
+      const { apiKey, claimUrl, verificationCode } = extractCredentials(mbData);
 
       if (!apiKey) {
         return new Response(
@@ -143,8 +174,9 @@ Deno.serve(async (req) => {
           user_id: user.id,
           agent_id: agent.id,
           moltbook_api_key: apiKey,
-          moltbook_agent_name: agentName,
+          moltbook_agent_name: finalName,
           claim_url: claimUrl,
+          verification_code: verificationCode,
           claim_status: "pending_claim",
         });
 
@@ -162,7 +194,10 @@ Deno.serve(async (req) => {
         JSON.stringify({
           success: true,
           claimUrl,
-          agentName,
+          verificationCode,
+          agentName: finalName,
+          nameChanged: finalName !== agentName,
+          originalName: agentName,
           message: mbData.message,
         }),
         {
@@ -200,7 +235,6 @@ Deno.serve(async (req) => {
       });
       const statusData = await res.json();
 
-      // Update claim_status in DB if changed
       const newStatus = statusData.claimed ? "claimed" : "pending_claim";
       if (newStatus !== connection.claim_status) {
         await adminClient

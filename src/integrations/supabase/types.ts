@@ -161,6 +161,7 @@ export type Database = {
           moltbook_api_key: string
           updated_at: string
           user_id: string
+          verification_code: string | null
         }
         Insert: {
           agent_id?: string | null
@@ -172,6 +173,7 @@ export type Database = {
           moltbook_api_key: string
           updated_at?: string
           user_id: string
+          verification_code?: string | null
         }
         Update: {
           agent_id?: string | null
@@ -183,6 +185,7 @@ export type Database = {
           moltbook_api_key?: string
           updated_at?: string
           user_id?: string
+          verification_code?: string | null
         }
         Relationships: [
           {
