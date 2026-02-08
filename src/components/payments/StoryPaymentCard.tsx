@@ -29,8 +29,11 @@ const statusBadge = (status: string) => {
 
 const StoryPaymentCard = ({ agentId, onPaymentComplete, payments = [], loadingHistory = false }: StoryPaymentCardProps) => {
   const { executePayment, loading, error, lastResult } = useX402Payment();
-  const [targetUrl, setTargetUrl] = useState("https://storyx402.lovable.app/");
-  const [maxAmount, setMaxAmount] = useState("1.00");
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const [targetUrl, setTargetUrl] = useState(
+    `${supabaseUrl}/functions/v1/x402-test-seller?network=story-mainnet&price=0.000001`
+  );
+  const [maxAmount, setMaxAmount] = useState("0.000001");
 
   const handleExecute = async () => {
     if (!agentId) return;
@@ -54,7 +57,8 @@ const StoryPaymentCard = ({ agentId, onPaymentComplete, payments = [], loadingHi
           <Badge variant="outline" className="text-xs">On-chain</Badge>
         </div>
         <CardDescription>
-          Test against the self-hosted Story facilitator. Payments settle on-chain via USDC.e.
+          Test against the self-hosted x402 test seller. Payments settle on-chain via USDC.e on Story Mainnet.
+          <span className="block mt-1 text-xs text-destructive font-medium">⚠️ Real on-chain payments — not refunded.</span>
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
