@@ -52,7 +52,12 @@ const Payments = () => {
       </div>
 
       <EchoTestPaymentCard agentId={agentId} onPaymentComplete={fetchPayments} />
-      <StoryPaymentCard agentId={agentId} onPaymentComplete={fetchPayments} />
+      <StoryPaymentCard
+        agentId={agentId}
+        onPaymentComplete={fetchPayments}
+        payments={payments.filter(p => p.network === "story-mainnet" || p.network === "story")}
+        loadingHistory={loadingHistory}
+      />
       <PaymentHistoryTable payments={payments} loading={loadingHistory} />
     </div>
   );
