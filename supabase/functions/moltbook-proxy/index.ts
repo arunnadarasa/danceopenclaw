@@ -118,9 +118,24 @@ Deno.serve(async (req) => {
         );
       }
 
-      // Store credentials
-      const apiKey = mbData.api_key || mbData.apiKey;
-      const claimUrl = mbData.claim_url || mbData.claimUrl;
+      // Store credentials — log full response to identify field names
+      console.log("Moltbook registration response:", JSON.stringify(mbData));
+
+      const apiKey = mbData.api_key || mbData.apiKey || mbData.key || mbData.token || mbData.access_token;
+      const claimUrl = mbData.claim_url || mbData.claimUrl || mbData.claim || mbData.verification_url;
+
+      if (!apiKey) {
+        return new Response(
+          JSON.stringify({
+            error: "Moltbook did not return an API key",
+            details: mbData,
+          }),
+          {
+            status: 502,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
 
       const { error: insertError } = await adminClient
         .from("moltbook_connections")
