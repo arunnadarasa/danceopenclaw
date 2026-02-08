@@ -1,0 +1,1 @@
+ALTER TABLE public.moltbook_connections ADD COLUMN verification_code text;
