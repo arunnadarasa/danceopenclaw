@@ -7,6 +7,7 @@ import {
   Trash2,
   PanelLeftClose,
   PanelLeftOpen,
+  X,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -22,6 +23,7 @@ import { streamChat, type ChatMessage as StreamMessage } from "@/lib/openclaw-st
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { format, isToday, isYesterday } from "date-fns";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
@@ -60,6 +62,7 @@ const ChatPage = () => {
     renameConversation,
   } = useChatConversations();
   const { toast } = useToast();
+  const isMobile = useIsMobile();
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -68,10 +71,15 @@ const ChatPage = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamContent, setStreamContent] = useState("");
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false); // default closed, opened explicitly
   const [loadingConvos, setLoadingConvos] = useState(true);
 
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // On desktop, default sidebar open
+  useEffect(() => {
+    if (!isMobile) setSidebarOpen(true);
+  }, [isMobile]);
 
   /* ---- scroll helper ---- */
   const scrollToBottom = useCallback(() => {
@@ -106,6 +114,7 @@ const ChatPage = () => {
       setActiveId(id);
       setMessages([]);
       setStreamContent("");
+      if (isMobile) setSidebarOpen(false);
       try {
         const msgs = await fetchMessages(id);
         setMessages(msgs);
@@ -113,7 +122,7 @@ const ChatPage = () => {
         toast({ title: "Failed to load messages", variant: "destructive" });
       }
     },
-    [fetchMessages, toast]
+    [fetchMessages, toast, isMobile]
   );
 
   /* ---- new chat ---- */
@@ -124,10 +133,11 @@ const ChatPage = () => {
       setActiveId(conv.id);
       setMessages([]);
       setStreamContent("");
+      if (isMobile) setSidebarOpen(false);
     } catch {
       toast({ title: "Failed to create chat", variant: "destructive" });
     }
-  }, [createConversation, toast]);
+  }, [createConversation, toast, isMobile]);
 
   /* ---- delete chat ---- */
   const handleDelete = useCallback(
@@ -154,7 +164,6 @@ const ChatPage = () => {
 
     let convId = activeId;
 
-    // Auto-create a conversation if none active
     if (!convId) {
       try {
         const conv = await createConversation(trimmed.slice(0, 50));
@@ -172,7 +181,6 @@ const ChatPage = () => {
     setIsStreaming(false);
     setStreamContent("");
 
-    // Save user message
     const userMsg: ChatMessage = {
       id: crypto.randomUUID(),
       conversation_id: convId,
@@ -184,11 +192,8 @@ const ChatPage = () => {
 
     try {
       await saveMessage(convId, "user", trimmed);
-    } catch {
-      /* continue anyway */
-    }
+    } catch { /* continue */ }
 
-    // Auto-title from first user message
     const isFirst = messages.length === 0;
     if (isFirst) {
       const title = trimmed.slice(0, 50);
@@ -198,7 +203,6 @@ const ChatPage = () => {
       );
     }
 
-    // Build history for API
     const history: StreamMessage[] = [
       ...messages.map((m) => ({ role: m.role, content: m.content })),
       { role: "user" as const, content: trimmed },
@@ -230,11 +234,8 @@ const ChatPage = () => {
 
           try {
             await saveMessage(convId!, "assistant", assistantContent);
-          } catch {
-            /* silent */
-          }
+          } catch { /* silent */ }
 
-          // Bump conversation to top
           setConversations((prev) => {
             const updated = prev.map((c) =>
               c.id === convId ? { ...c, updated_at: new Date().toISOString() } : c
@@ -280,65 +281,94 @@ const ChatPage = () => {
   const activeConvo = conversations.find((c) => c.id === activeId);
   const grouped = groupConversationsByDate(conversations);
 
-  return (
-    <div className="flex h-[calc(100vh-4rem)] overflow-hidden">
-      {/* ─── Conversation sidebar ─── */}
-      <div
-        className={cn(
-          "flex flex-col border-r border-border bg-muted/30 transition-all duration-300",
-          sidebarOpen ? "w-72 min-w-[18rem]" : "w-0 min-w-0 overflow-hidden"
-        )}
-      >
-        <div className="flex items-center justify-between p-3 border-b border-border">
-          <span className="text-sm font-semibold text-foreground">Conversations</span>
+  /* ---- Sidebar content (shared between mobile/desktop) ---- */
+  const sidebarContent = (
+    <>
+      <div className="flex items-center justify-between p-3 border-b border-border">
+        <span className="text-sm font-semibold text-foreground">Conversations</span>
+        <div className="flex items-center gap-1">
           <Button size="sm" variant="outline" className="gap-1.5" onClick={handleNewChat}>
             <Plus className="h-3.5 w-3.5" />
             New
           </Button>
-        </div>
-
-        <ScrollArea className="flex-1">
-          {loadingConvos ? (
-            <div className="flex justify-center py-8">
-              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-            </div>
-          ) : conversations.length === 0 ? (
-            <div className="px-4 py-8 text-center text-sm text-muted-foreground">
-              No conversations yet
-            </div>
-          ) : (
-            <div className="p-2 space-y-3">
-              {grouped.map((group) => (
-                <div key={group.label}>
-                  <p className="px-2 py-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    {group.label}
-                  </p>
-                  {group.items.map((c) => (
-                    <button
-                      key={c.id}
-                      onClick={() => selectConversation(c.id)}
-                      className={cn(
-                        "group flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition-colors",
-                        c.id === activeId
-                          ? "bg-primary/10 text-primary"
-                          : "text-foreground/70 hover:bg-muted"
-                      )}
-                    >
-                      <span className="truncate">{c.title}</span>
-                      <button
-                        onClick={(e) => handleDelete(c.id, e)}
-                        className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 text-muted-foreground hover:text-destructive"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </button>
-                  ))}
-                </div>
-              ))}
-            </div>
+          {isMobile && (
+            <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => setSidebarOpen(false)}>
+              <X className="h-4 w-4" />
+            </Button>
           )}
-        </ScrollArea>
+        </div>
       </div>
+
+      <ScrollArea className="flex-1">
+        {loadingConvos ? (
+          <div className="flex justify-center py-8">
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          </div>
+        ) : conversations.length === 0 ? (
+          <div className="px-4 py-8 text-center text-sm text-muted-foreground">
+            No conversations yet
+          </div>
+        ) : (
+          <div className="p-2 space-y-3">
+            {grouped.map((group) => (
+              <div key={group.label}>
+                <p className="px-2 py-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  {group.label}
+                </p>
+                {group.items.map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => selectConversation(c.id)}
+                    className={cn(
+                      "group flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition-colors",
+                      c.id === activeId
+                        ? "bg-primary/10 text-primary"
+                        : "text-foreground/70 hover:bg-muted"
+                    )}
+                  >
+                    <span className="truncate">{c.title}</span>
+                    <button
+                      onClick={(e) => handleDelete(c.id, e)}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 text-muted-foreground hover:text-destructive"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </button>
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
+      </ScrollArea>
+    </>
+  );
+
+  return (
+    <div className="flex h-[calc(100vh-4rem)] overflow-hidden relative">
+      {/* ─── Mobile sidebar overlay ─── */}
+      {isMobile && sidebarOpen && (
+        <>
+          <div
+            className="fixed inset-0 z-40 bg-background/80 backdrop-blur-sm"
+            onClick={() => setSidebarOpen(false)}
+          />
+          <div className="fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r border-border bg-background">
+            {sidebarContent}
+          </div>
+        </>
+      )}
+
+      {/* ─── Desktop sidebar (inline) ─── */}
+      {!isMobile && (
+        <div
+          className={cn(
+            "flex flex-col border-r border-border bg-muted/30 transition-all duration-300",
+            sidebarOpen ? "w-72 min-w-[18rem]" : "w-0 min-w-0 overflow-hidden"
+          )}
+        >
+          {sidebarContent}
+        </div>
+      )}
 
       {/* ─── Main chat area ─── */}
       <div className="flex flex-1 flex-col min-w-0">
@@ -350,7 +380,7 @@ const ChatPage = () => {
             className="h-8 w-8 shrink-0"
             onClick={() => setSidebarOpen((v) => !v)}
           >
-            {sidebarOpen ? (
+            {sidebarOpen && !isMobile ? (
               <PanelLeftClose className="h-4 w-4" />
             ) : (
               <PanelLeftOpen className="h-4 w-4" />
@@ -363,7 +393,7 @@ const ChatPage = () => {
         </div>
 
         {/* Messages */}
-        <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
+        <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4 pb-20">
           {!activeId && messages.length === 0 && (
             <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-sm text-center gap-3">
               <MessageCircle className="h-12 w-12 opacity-20" />
@@ -385,7 +415,7 @@ const ChatPage = () => {
             >
               <div
                 className={cn(
-                  "max-w-[75%] rounded-xl px-4 py-3 text-sm",
+                  "max-w-[90%] md:max-w-[75%] rounded-xl px-4 py-3 text-sm",
                   msg.role === "user"
                     ? "bg-primary text-primary-foreground rounded-br-sm whitespace-pre-wrap"
                     : "bg-muted text-foreground rounded-bl-sm"
@@ -407,7 +437,7 @@ const ChatPage = () => {
           {/* Streaming assistant message */}
           {isStreaming && streamContent && (
             <div className="flex justify-start">
-              <div className="max-w-[75%] rounded-xl rounded-bl-sm px-4 py-3 text-sm bg-muted text-foreground">
+              <div className="max-w-[90%] md:max-w-[75%] rounded-xl rounded-bl-sm px-4 py-3 text-sm bg-muted text-foreground">
                 <div className="prose prose-sm prose-invert max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
                     {streamContent}

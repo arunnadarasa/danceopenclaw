@@ -88,7 +88,7 @@ const EchoTestPaymentCard = ({ agentId, onPaymentComplete }: EchoTestPaymentCard
           </div>
         </div>
 
-        <Button onClick={handleExecute} disabled={loading || !agentId} className="w-full sm:w-auto">
+        <Button onClick={handleExecute} disabled={loading || !agentId} className="w-full md:w-auto">
           {loading ? (
             <>
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -114,7 +114,7 @@ const EchoTestPaymentCard = ({ agentId, onPaymentComplete }: EchoTestPaymentCard
             <p className="text-sm font-medium text-success">Payment executed successfully</p>
             <div className="grid gap-1 text-xs text-muted-foreground">
               <p><span className="font-medium text-foreground">Amount:</span> {lastResult.paymentAmount} USDC</p>
-              <p><span className="font-medium text-foreground">Recipient:</span> <span className="font-mono">{lastResult.recipient}</span></p>
+              <p><span className="font-medium text-foreground">Recipient:</span> <span className="font-mono break-all">{lastResult.recipient}</span></p>
               <p><span className="font-medium text-foreground">Network:</span> {NETWORK_LABELS[lastResult.network || ""] || lastResult.network}</p>
               <p><span className="font-medium text-foreground">HTTP Status:</span> {lastResult.status}</p>
             </div>

@@ -20,8 +20,14 @@ import Payments from "./pages/Payments";
 import MoltbookPage from "./pages/Moltbook";
 import ChatPage from "./pages/Chat";
 import NotFound from "./pages/NotFound";
+import { useCartSync } from "@/hooks/useCartSync";
 
 const queryClient = new QueryClient();
+
+const CartSyncProvider = ({ children }: { children: React.ReactNode }) => {
+  useCartSync();
+  return <>{children}</>;
+};
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -30,6 +36,7 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
+          <CartSyncProvider>
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/auth" element={<Auth />} />
@@ -58,6 +65,7 @@ const App = () => (
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
+          </CartSyncProvider>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>

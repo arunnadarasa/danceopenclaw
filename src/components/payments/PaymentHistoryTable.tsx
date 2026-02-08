@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ExternalLink, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
 import { NETWORK_LABELS, getExplorerUrl } from "./payment-constants";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 export interface PaymentRecord {
   id: string;
@@ -41,7 +42,36 @@ const statusBadge = (status: string) => {
   }
 };
 
+const MobilePaymentCard = ({ p }: { p: PaymentRecord }) => (
+  <div className="rounded-lg border border-border bg-secondary/20 p-3 space-y-2">
+    <div className="flex items-center justify-between gap-2">
+      <span className="text-xs text-muted-foreground">
+        {new Date(p.created_at).toLocaleDateString()}
+      </span>
+      {statusBadge(p.status)}
+    </div>
+    <div className="flex items-center justify-between gap-2">
+      <span className="text-sm font-medium">{p.amount} USDC</span>
+      <span className="text-xs text-muted-foreground">{NETWORK_LABELS[p.network] || p.network}</span>
+    </div>
+    <p className="text-xs font-mono text-muted-foreground truncate">{p.target_url}</p>
+    {p.tx_hash && (
+      <a
+        href={getExplorerUrl(p.network, p.tx_hash)}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-center gap-1 text-xs text-primary hover:underline font-mono"
+      >
+        {p.tx_hash.slice(0, 10)}…{p.tx_hash.slice(-4)}
+        <ExternalLink className="h-3 w-3" />
+      </a>
+    )}
+  </div>
+);
+
 const PaymentHistoryTable = ({ payments, loading }: PaymentHistoryTableProps) => {
+  const isMobile = useIsMobile();
+
   return (
     <Card className="bg-gradient-card border-border">
       <CardHeader>
@@ -55,6 +85,12 @@ const PaymentHistoryTable = ({ payments, loading }: PaymentHistoryTableProps) =>
           </div>
         ) : payments.length === 0 ? (
           <p className="text-center py-8 text-muted-foreground">No payments yet.</p>
+        ) : isMobile ? (
+          <div className="space-y-3">
+            {payments.map((p) => (
+              <MobilePaymentCard key={p.id} p={p} />
+            ))}
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <Table>

@@ -45,8 +45,8 @@ const Payments = () => {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold font-display">x402 Payments</h1>
-        <p className="text-muted-foreground mt-1">
+        <h1 className="text-xl sm:text-2xl font-bold font-display">x402 Payments</h1>
+        <p className="text-xs sm:text-sm text-muted-foreground mt-1">
           Execute and track HTTP 402 payments using USDC across chains.
         </p>
       </div>

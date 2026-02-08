@@ -34,12 +34,12 @@ const StoryPaymentCard = ({ agentId, onPaymentComplete }: StoryPaymentCardProps)
   return (
     <Card className="bg-gradient-card border-border">
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
-            <Globe className="h-5 w-5 text-primary" />
-            Story Mainnet x402 Payment
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+            <Globe className="h-5 w-5 text-primary shrink-0" />
+            <span className="truncate">Story Mainnet x402 Payment</span>
           </CardTitle>
-          <Badge variant="outline" className="text-xs">On-chain</Badge>
+          <Badge variant="outline" className="text-xs shrink-0">On-chain</Badge>
         </div>
         <CardDescription>
           Test against the self-hosted x402 test seller. Payments settle on-chain via USDC.e on Story Mainnet.
@@ -72,7 +72,7 @@ const StoryPaymentCard = ({ agentId, onPaymentComplete }: StoryPaymentCardProps)
           </div>
         </div>
 
-        <Button onClick={handleExecute} disabled={loading || !agentId} className="w-full sm:w-auto">
+        <Button onClick={handleExecute} disabled={loading || !agentId} className="w-full md:w-auto">
           {loading ? (
             <>
               <Loader2 className="h-4 w-4 animate-spin" />

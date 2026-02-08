@@ -2,6 +2,7 @@ import { ExternalLink, Server, Key, Plug } from "lucide-react";
 import { Link } from "react-router-dom";
 
 const DOCS_URL = "https://www.digitalocean.com/community/tutorials/how-to-run-openclaw";
+const MARKETPLACE_URL = "https://docs.digitalocean.com/products/marketplace/catalog/openclaw/";
 
 const Docs = () => (
   <div className="min-h-screen bg-background text-foreground">
@@ -41,14 +42,24 @@ const Docs = () => (
             The 1-Click deploy includes <strong className="text-foreground">firewall rules, Docker isolation, and non-root execution</strong> out of the box.
           </li>
         </ul>
-        <a
-          href={DOCS_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
-        >
-          Full DigitalOcean setup guide <ExternalLink className="h-3 w-3" />
-        </a>
+        <div className="flex flex-wrap gap-x-4 gap-y-1">
+          <a
+            href={DOCS_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+          >
+            Full setup guide <ExternalLink className="h-3 w-3" />
+          </a>
+          <a
+            href={MARKETPLACE_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+          >
+            Marketplace listing <ExternalLink className="h-3 w-3" />
+          </a>
+        </div>
       </section>
 
       {/* Step 2 — Get an AI API Key */}
@@ -98,7 +109,7 @@ const Docs = () => (
       </section>
 
       {/* Full docs CTA */}
-      <div className="text-center">
+      <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
         <a
           href={DOCS_URL}
           target="_blank"
@@ -106,6 +117,14 @@ const Docs = () => (
           className="inline-flex items-center gap-2 rounded-lg bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
         >
           Read the full documentation <ExternalLink className="h-4 w-4" />
+        </a>
+        <a
+          href={MARKETPLACE_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 rounded-lg border border-border px-6 py-3 text-sm font-semibold text-foreground transition-colors hover:bg-muted"
+        >
+          Marketplace catalog <ExternalLink className="h-4 w-4" />
         </a>
       </div>
     </div>
