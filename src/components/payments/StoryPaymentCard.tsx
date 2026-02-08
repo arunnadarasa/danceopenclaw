@@ -29,7 +29,7 @@ const statusBadge = (status: string) => {
 
 const StoryPaymentCard = ({ agentId, onPaymentComplete, payments = [], loadingHistory = false }: StoryPaymentCardProps) => {
   const { executePayment, loading, error, lastResult } = useX402Payment();
-  const [targetUrl, setTargetUrl] = useState("https://storyx402.lovable.app/");
+  const [targetUrl, setTargetUrl] = useState("https://wnpqmryjrhuobxxlipti.supabase.co/functions/v1/paid-content");
   const [maxAmount, setMaxAmount] = useState("1.00");
 
   const handleExecute = async () => {
@@ -64,7 +64,7 @@ const StoryPaymentCard = ({ agentId, onPaymentComplete, payments = [], loadingHi
             <Input
               value={targetUrl}
               onChange={(e) => setTargetUrl(e.target.value)}
-              placeholder="https://storyx402.lovable.app/"
+              placeholder="https://wnpqmryjrhuobxxlipti.supabase.co/functions/v1/paid-content"
             />
           </div>
           <div className="space-y-2">
