@@ -6,6 +6,9 @@ import { Button } from "@/components/ui/button";
 import { useShopifyProducts } from "@/hooks/useShopifyProducts";
 import ProductCard from "@/components/shop/ProductCard";
 import { CartDrawer } from "@/components/shop/CartDrawer";
+import { useCartStore } from "@/stores/cartStore";
+import type { ShopifyProduct } from "@/lib/shopify";
+import { toast } from "sonner";
 
 /* ── Mock fallback data ── */
 type Category = "All" | "Apparel" | "Accessories" | "Music" | "Gear";
@@ -32,6 +35,7 @@ const CATEGORIES: Category[] = ["All", "Apparel", "Accessories", "Music", "Gear"
 
 const Shop = () => {
   const { products: shopifyProducts, loading: shopifyLoading } = useShopifyProducts();
+  const addLocalItem = useCartStore((s) => s.addLocalItem);
   const [activeCategory, setActiveCategory] = useState<Category>("All");
 
   const hasShopifyProducts = shopifyProducts.length > 0;
@@ -40,6 +44,48 @@ const Shop = () => {
     activeCategory === "All"
       ? MOCK_PRODUCTS
       : MOCK_PRODUCTS.filter((p) => p.category === activeCategory);
+
+  const handleAddMock = (product: MockProduct) => {
+    // Build a ShopifyProduct-shaped object for the cart
+    const fakeVariantId = `mock-variant-${product.id}`;
+    const fakeProduct: ShopifyProduct = {
+      node: {
+        id: `mock-${product.id}`,
+        title: product.title,
+        description: "",
+        handle: product.title.toLowerCase().replace(/\s+/g, "-"),
+        priceRange: {
+          minVariantPrice: { amount: String(product.price), currencyCode: "USDC" },
+        },
+        images: {
+          edges: [{ node: { url: product.image, altText: product.title } }],
+        },
+        variants: {
+          edges: [{
+            node: {
+              id: fakeVariantId,
+              title: "Default",
+              price: { amount: String(product.price), currencyCode: "USDC" },
+              availableForSale: true,
+              selectedOptions: [{ name: "Category", value: product.category }],
+            },
+          }],
+        },
+        options: [{ name: "Category", values: [product.category] }],
+      },
+    };
+
+    addLocalItem({
+      product: fakeProduct,
+      variantId: fakeVariantId,
+      variantTitle: "Default",
+      price: { amount: String(product.price), currencyCode: "USDC" },
+      quantity: 1,
+      selectedOptions: [{ name: "Category", value: product.category }],
+    });
+
+    toast.success(`${product.title} added to cart`, { position: "top-center" });
+  };
 
   return (
     <div className="space-y-5 sm:space-y-8">
@@ -124,9 +170,9 @@ const Shop = () => {
                     <Badge variant="secondary" className="text-xs">
                       {product.category}
                     </Badge>
-                    <Button size="sm" disabled className="opacity-60">
+                    <Button size="sm" onClick={() => handleAddMock(product)}>
                       <ShoppingBag className="h-3.5 w-3.5 mr-1.5" />
-                      Coming Soon
+                      Add to Cart
                     </Button>
                   </div>
                 </CardContent>

@@ -14,8 +14,12 @@ import { useCartStore } from "@/stores/cartStore";
 
 export const CartDrawer = () => {
   const [isOpen, setIsOpen] = useState(false);
-  const { items, isLoading, isSyncing, updateQuantity, removeItem, getCheckoutUrl, syncCart } =
-    useCartStore();
+  const {
+    items, isLoading, isSyncing,
+    updateQuantity, removeItem,
+    updateLocalQuantity, removeLocalItem,
+    getCheckoutUrl, syncCart,
+  } = useCartStore();
 
   const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
   const totalPrice = items.reduce(
@@ -24,8 +28,30 @@ export const CartDrawer = () => {
   );
 
   useEffect(() => {
-    if (isOpen) syncCart();
+    if (isOpen) {
+      // Only sync if we have a Shopify cart
+      const { cartId } = useCartStore.getState();
+      if (cartId) syncCart();
+    }
   }, [isOpen, syncCart]);
+
+  const isMockItem = (variantId: string) => variantId.startsWith("mock-variant-");
+
+  const handleUpdateQty = (variantId: string, qty: number) => {
+    if (isMockItem(variantId)) {
+      updateLocalQuantity(variantId, qty);
+    } else {
+      updateQuantity(variantId, qty);
+    }
+  };
+
+  const handleRemove = (variantId: string) => {
+    if (isMockItem(variantId)) {
+      removeLocalItem(variantId);
+    } else {
+      removeItem(variantId);
+    }
+  };
 
   const handleCheckout = () => {
     const checkoutUrl = getCheckoutUrl();
@@ -93,7 +119,7 @@ export const CartDrawer = () => {
                           variant="ghost"
                           size="icon"
                           className="h-6 w-6"
-                          onClick={() => removeItem(item.variantId)}
+                          onClick={() => handleRemove(item.variantId)}
                         >
                           <Trash2 className="h-3 w-3" />
                         </Button>
@@ -102,7 +128,7 @@ export const CartDrawer = () => {
                             variant="outline"
                             size="icon"
                             className="h-6 w-6"
-                            onClick={() => updateQuantity(item.variantId, item.quantity - 1)}
+                            onClick={() => handleUpdateQty(item.variantId, item.quantity - 1)}
                           >
                             <Minus className="h-3 w-3" />
                           </Button>
@@ -111,7 +137,7 @@ export const CartDrawer = () => {
                             variant="outline"
                             size="icon"
                             className="h-6 w-6"
-                            onClick={() => updateQuantity(item.variantId, item.quantity + 1)}
+                            onClick={() => handleUpdateQty(item.variantId, item.quantity + 1)}
                           >
                             <Plus className="h-3 w-3" />
                           </Button>
