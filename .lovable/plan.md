@@ -1,121 +1,48 @@
 
 
-## Fix Solana Mainnet Payment (403 RPC Error)
+## Add USDC Support for Story Mainnet
 
-### Root Cause
+### Current State
 
-The Solana public mainnet RPC (`https://api.mainnet-beta.solana.com`) blocks or rate-limits browser requests, returning **403 Access Forbidden**. The current flow builds transactions client-side in `SendTokenForm.tsx`, which requires fetching a recent blockhash from this RPC -- and that fails.
+- **Balance display works**: The backend already fetches USDC.e balance for Story mainnet using address `0xF1815bd50389c46847f0Bda824eC8da914045D14` (visible as "0.10 USDC" in the screenshot)
+- **Sending is blocked**: Story is not listed in `USDC_CONTRACTS` (backend) or `USDC_CHAINS` (frontend), so the Token dropdown only shows "Native (IP)" when Story is selected
 
-### Solution: Move Transaction Building to the Backend
+### Changes
 
-Instead of building Solana transactions in the browser (which needs RPC access), move the transaction building to the `agent-wallet` backend function, which can reliably call the RPC from the server side.
+#### 1. `supabase/functions/agent-wallet/index.ts` -- Backend
 
-### Current Flow (broken for mainnet)
-
-```text
-Browser (SendTokenForm)              Backend (agent-wallet)
-  |                                     |
-  |-- fetch blockhash from RPC -------> X (403 Forbidden)
-  |-- build unsigned transaction        |
-  |-- serialize & send to backend ----> |
-  |                                     |-- sign via Privy
-  |                                     |-- broadcast via RPC
-  |                                     |-- return result
-```
-
-### New Flow (works for all networks)
-
-```text
-Browser (SendTokenForm)              Backend (agent-wallet)
-  |                                     |
-  |-- send {to, amount, chain} -------> |
-  |                                     |-- fetch blockhash from RPC (server-side, no CORS)
-  |                                     |-- build unsigned transaction
-  |                                     |-- sign via Privy
-  |                                     |-- broadcast via RPC
-  |                                     |-- return result
-```
-
----
-
-### Changes by File
-
-#### 1. `supabase/functions/agent-wallet/index.ts` -- Backend transaction building
-
-Update the `send_sol` action to accept **either**:
-- A pre-built serialized transaction (existing behavior, kept for backward compat)
-- Raw parameters (`to`, `amount`, `token_type`) to build the transaction server-side
-
-When raw parameters are provided (no `transaction` field), the edge function will:
-1. Fetch the recent blockhash from the Solana RPC
-2. Build the appropriate transaction (native SOL transfer or USDC SPL transfer)
-3. Sign via Privy
-4. Broadcast via RPC
-
-Also add support for an optional `SOLANA_MAINNET_RPC_URL` environment variable so a custom RPC provider (e.g., Helius, QuickNode) can be used instead of the public endpoint.
-
-#### 2. `src/components/wallet/SendTokenForm.tsx` -- Simplify client-side code
-
-For Solana transactions, instead of building the transaction client-side (which requires RPC access), simply send the raw parameters to the backend:
-- Remove client-side `buildSolanaTransaction` and `buildSolanaUsdcTransaction` calls for the send flow
-- Send `{ chain, to_address, amount, token_type }` directly to `onSendSol`
-- Keep the `SOLANA_RPC` and build functions as they may be useful elsewhere, but the send flow won't use them
-
-#### 3. `supabase/functions/execute-x402-payment-solana/index.ts` -- Use configurable RPC
-
-Update to also check for `SOLANA_MAINNET_RPC_URL` env var before falling back to the public endpoint, for consistent behavior.
-
----
-
-### Technical Details
-
-**New `send_sol` server-side transaction building (in agent-wallet):**
-
-When `body.transaction` is not provided but `body.to_address` and `body.amount` are:
-
-For **native SOL** transfers:
-- Use `SystemProgram.transfer` instruction
-- Set `feePayer` to the wallet's public key
-- Fetch `recentBlockhash` server-side
-
-For **USDC SPL** transfers:
-- Compute ATAs for sender and recipient
-- Check if recipient ATA exists; if not, add a `createAssociatedTokenAccount` instruction
-- Add `transferChecked` instruction with 6 decimals
-- (Reuses the same approach currently in `SendTokenForm.tsx`)
-
-**RPC URL resolution:**
+Add Story mainnet to the `USDC_CONTRACTS` map so the `send_usdc` action supports it:
 
 ```typescript
-function getSolanaRpcUrl(chainKey: string): string {
-  if (chainKey === "solana") {
-    return Deno.env.get("SOLANA_MAINNET_RPC_URL") || "https://api.mainnet-beta.solana.com";
-  }
-  return "https://api.devnet.solana.com";
-}
+const USDC_CONTRACTS: Record<string, string> = {
+  base_sepolia: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+  base:         "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+  story:        "0xF1815bd50389c46847f0Bda824eC8da914045D14",  // USDC.e via Stargate
+};
 ```
 
-**SendTokenForm simplified Solana flow:**
+The existing `send_usdc` action already handles EVM ERC-20 transfers using `eth_sendTransaction` with the standard `transfer(address,uint256)` calldata. Since Story is EVM-compatible, this works without any other backend changes.
+
+#### 2. `src/components/wallet/SendTokenForm.tsx` -- Frontend
+
+Add `"story"` to the `USDC_CHAINS` array so the Token selector shows the USDC option when Story mainnet is selected:
 
 ```typescript
-// Before: build tx client-side, send serialized tx
-const serializedTx = await buildSolanaTransaction(wallet.address, to, amount, rpcUrl);
-await onSendSol(chain, serializedTx, { token_type: "native", to_address: to, amount });
-
-// After: just send params, backend builds tx
-await onSendSol(chain, "", { token_type: "native", to_address: to, amount });
+const USDC_CHAINS = ["base_sepolia", "base", "solana_devnet", "solana", "story"];
 ```
 
-The `useAgentWallet` hook's `sendSol` function signature stays the same -- the `transaction` field becomes optional/empty and the backend handles building it.
+The send flow already routes Story through the `onSendUsdc` handler (EVM path), so no other frontend changes are needed.
 
----
+### What This Enables
+
+When the user selects "Story (mainnet)" in the Send Tokens form, the Token dropdown will now show both "Native (IP)" and "USDC" options. Selecting USDC will send a standard ERC-20 `transfer` call to the USDC.e contract on Story mainnet via the Privy wallet.
 
 ### Files Modified
 
 | File | Change |
 |------|--------|
-| `supabase/functions/agent-wallet/index.ts` | Add server-side Solana tx building in `send_sol` when no pre-built tx provided; add configurable RPC URL |
-| `src/components/wallet/SendTokenForm.tsx` | Stop building Solana txs client-side; send raw params to backend instead |
-| `supabase/functions/execute-x402-payment-solana/index.ts` | Use configurable `SOLANA_MAINNET_RPC_URL` env var |
+| `supabase/functions/agent-wallet/index.ts` | Add `story` to `USDC_CONTRACTS` |
+| `src/components/wallet/SendTokenForm.tsx` | Add `"story"` to `USDC_CHAINS` |
 
 ### No database changes required.
+
