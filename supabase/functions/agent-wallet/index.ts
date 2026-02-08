@@ -686,15 +686,15 @@ serve(async (req) => {
 
           const txHash = broadcastData.result;
 
-          // Record SOL transaction
+          // Record transaction (use optional metadata from body for better history)
           try {
             await serviceClient.from("wallet_transactions").insert({
               agent_id: agent.id,
               chain: chainKey,
-              token_type: "native",
+              token_type: body.token_type || "native",
               from_address: wallet.address,
-              to_address: "solana_tx",
-              amount: "0",
+              to_address: body.to_address || "solana_tx",
+              amount: body.amount || "0",
               tx_hash: txHash || null,
               status: "success",
             });

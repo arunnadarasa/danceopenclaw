@@ -18,17 +18,23 @@ interface SendTokenFormProps {
   wallets: WalletInfo[];
   onSendNative: (chain: string, to: string, value: string) => Promise<unknown>;
   onSendUsdc: (chain: string, to: string, amount: string) => Promise<unknown>;
-  onSendSol?: (chain: string, transaction: string) => Promise<unknown>;
+  onSendSol?: (chain: string, transaction: string, meta?: { token_type?: string; to_address?: string; amount?: string }) => Promise<unknown>;
   loading: boolean;
 }
 
 type TokenType = "native" | "usdc";
 
-const USDC_CHAINS = ["base_sepolia", "base"];
+// Chains that support USDC sends (EVM + Solana)
+const USDC_CHAINS = ["base_sepolia", "base", "solana_devnet", "solana"];
 
 const SOLANA_RPC: Record<string, string> = {
   solana_devnet: "https://api.devnet.solana.com",
   solana: "https://api.mainnet-beta.solana.com",
+};
+
+const SOLANA_USDC_MINTS: Record<string, string> = {
+  solana_devnet: "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+  solana: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
 };
 
 function getNativeTokenLabel(chain: string): string {
@@ -64,7 +70,70 @@ async function buildSolanaTransaction(
     verifySignatures: false,
   });
 
-  // Convert to base64
+  return btoa(String.fromCharCode(...serialized));
+}
+
+async function buildSolanaUsdcTransaction(
+  fromAddress: string,
+  toAddress: string,
+  amount: string,
+  rpcUrl: string,
+  usdcMint: string
+): Promise<string> {
+  const { Connection, PublicKey, Transaction } = await import("@solana/web3.js");
+  const { getAssociatedTokenAddressSync, createTransferCheckedInstruction, createAssociatedTokenAccountInstruction, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID } = await import("@solana/spl-token");
+
+  const connection = new Connection(rpcUrl, "processed");
+  const fromPubkey = new PublicKey(fromAddress);
+  const toPubkey = new PublicKey(toAddress);
+  const mintPubkey = new PublicKey(usdcMint);
+
+  // USDC has 6 decimals
+  const decimals = 6;
+  const rawAmount = BigInt(Math.floor(parseFloat(amount) * 10 ** decimals));
+
+  // Get associated token accounts
+  const fromAta = getAssociatedTokenAddressSync(mintPubkey, fromPubkey);
+  const toAta = getAssociatedTokenAddressSync(mintPubkey, toPubkey);
+
+  const { blockhash } = await connection.getLatestBlockhash("processed");
+
+  const transaction = new Transaction();
+  transaction.recentBlockhash = blockhash;
+  transaction.feePayer = fromPubkey;
+
+  // Check if recipient's ATA exists, if not create it
+  const toAtaInfo = await connection.getAccountInfo(toAta);
+  if (!toAtaInfo) {
+    transaction.add(
+      createAssociatedTokenAccountInstruction(
+        fromPubkey,       // payer
+        toAta,            // associated token account
+        toPubkey,         // owner
+        mintPubkey,       // mint
+        TOKEN_PROGRAM_ID,
+        ASSOCIATED_TOKEN_PROGRAM_ID
+      )
+    );
+  }
+
+  // Add transferChecked instruction (validates decimals)
+  transaction.add(
+    createTransferCheckedInstruction(
+      fromAta,          // source
+      mintPubkey,       // mint
+      toAta,            // destination
+      fromPubkey,       // owner
+      rawAmount,        // amount
+      decimals          // decimals
+    )
+  );
+
+  const serialized = transaction.serialize({
+    requireAllSignatures: false,
+    verifySignatures: false,
+  });
+
   return btoa(String.fromCharCode(...serialized));
 }
 
@@ -86,10 +155,29 @@ export const SendTokenForm = ({ wallets, onSendNative, onSendUsdc, onSendSol, lo
 
     setSending(true);
     try {
-      if (tokenType === "usdc") {
+      if (tokenType === "usdc" && isSolana) {
+        // Build Solana USDC (SPL token) transaction client-side
+        if (!selectedWallet) throw new Error("No Solana wallet found");
+        if (!onSendSol) throw new Error("Solana send not available");
+
+        const rpcUrl = SOLANA_RPC[chain];
+        const usdcMint = SOLANA_USDC_MINTS[chain];
+        if (!rpcUrl || !usdcMint) throw new Error(`No USDC config for ${chain}`);
+
+        const serializedTx = await buildSolanaUsdcTransaction(
+          selectedWallet.address,
+          to,
+          amount,
+          rpcUrl,
+          usdcMint
+        );
+
+        await onSendSol(chain, serializedTx, { token_type: "usdc", to_address: to, amount });
+      } else if (tokenType === "usdc") {
+        // EVM USDC (Base)
         await onSendUsdc(chain, to, amount);
       } else if (isSolana) {
-        // Build the Solana transaction client-side, then send via the send_sol action
+        // Native SOL transfer
         if (!selectedWallet) throw new Error("No Solana wallet found");
         if (!onSendSol) throw new Error("Solana send not available");
 
@@ -103,9 +191,9 @@ export const SendTokenForm = ({ wallets, onSendNative, onSendUsdc, onSendSol, lo
           rpcUrl
         );
 
-        await onSendSol(chain, serializedTx);
+        await onSendSol(chain, serializedTx, { token_type: "native", to_address: to, amount });
       } else {
-        // Convert human-readable amount to wei hex for EVM chains
+        // EVM native (ETH/IP)
         const weiValue = "0x" + (BigInt(Math.floor(parseFloat(amount) * 1e18))).toString(16);
         await onSendNative(chain, to, weiValue);
       }
