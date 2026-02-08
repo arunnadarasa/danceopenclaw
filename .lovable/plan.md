@@ -1,95 +1,40 @@
 
 
-## Add Transaction History to the Wallet Page
+## Fix: Redirect Logged-in Users from Landing Page to Dashboard
 
-Add a transaction history table below the Send Tokens form on the Wallet page, showing all native token and USDC sends with links to the relevant block explorer for each chain.
+### The Problem
 
----
+After signing in with Google, the OAuth callback redirects to `window.location.origin` (which is `/` -- the landing page). The landing page has no auth awareness, so it just shows the marketing content with a "Sign In" button. The user has to click "Sign In" again, which takes them to `/auth`, which *then* detects the session and redirects to `/dashboard`.
 
-### Changes Required
+### The Fix (Two Changes)
 
-#### 1. Database: Create `wallet_transactions` table (migration)
+#### 1. Landing Page (`src/pages/Index.tsx`) -- Add auth-aware redirect
 
-A new table to record every send from the wallet page:
+Add a `useEffect` that checks if the user is already logged in. If so, redirect them straight to `/dashboard` (or `/onboarding` if onboarding is incomplete). This handles:
+- Users who are already signed in and visit the homepage
+- The OAuth callback redirect landing on `/`
 
-| Column | Type | Notes |
-|--------|------|-------|
-| `id` | UUID | Primary key, auto-generated |
-| `agent_id` | UUID | References the agent that owns the wallet |
-| `chain` | TEXT | Chain key (e.g. `base_sepolia`, `solana_devnet`, `story_aeneid`) |
-| `token_type` | TEXT | `native` or `usdc` |
-| `from_address` | TEXT | Sender wallet address |
-| `to_address` | TEXT | Recipient address |
-| `amount` | TEXT | Human-readable amount sent |
-| `tx_hash` | TEXT | Transaction hash (nullable -- set on success) |
-| `status` | TEXT | `success` or `failed`, default `success` |
-| `error_message` | TEXT | Error details (nullable) |
-| `created_at` | TIMESTAMPTZ | Auto-set |
+```text
+Flow after fix:
+  Google OAuth -> callback to / -> Index detects session -> redirect to /dashboard
+```
 
-RLS policies:
-- SELECT: Users can view transactions for agents they own (via agents table user_id check)
-- INSERT: Restricted to service role only (edge function inserts with service client)
+#### 2. Navbar (`src/components/landing/Navbar.tsx`) -- Show "Dashboard" instead of "Sign In"
 
-#### 2. Edge Function: `supabase/functions/agent-wallet/index.ts`
+Update the navbar button to be auth-aware:
+- If logged in: show "Dashboard" button linking to `/dashboard`
+- If not logged in: show "Sign In" button linking to `/auth` (current behavior)
 
-After each successful `send_native_token`, `send_usdc`, and `send_sol` action, insert a record into `wallet_transactions` using the existing `serviceClient`.
-
-For `send_native_token` (around line 526):
-- Extract tx hash from `txResult.data?.hash`
-- Convert the hex wei value back to human-readable amount
-- Insert with `token_type: "native"`
-
-For `send_usdc` (around line 577):
-- Extract tx hash from `txResult.data?.hash`
-- Use the original `body.amount` for readable amount
-- Insert with `token_type: "usdc"`
-
-For `send_sol` (around line 650):
-- Use the `txHash` from broadcast result
-- Insert with `token_type: "native"`
-
-#### 3. New Component: `src/components/wallet/TransactionHistory.tsx`
-
-A card component that:
-- Accepts `agentId` as a prop
-- Queries `wallet_transactions` from the database ordered by `created_at` descending, limited to 20 rows
-- Displays a table with columns: Date, Chain, Token, Amount, Recipient, Tx Hash, Status
-- The Tx Hash column links to the correct block explorer based on the `chain` value:
-  - `base_sepolia` -> `https://sepolia.basescan.org/tx/{hash}`
-  - `base` -> `https://basescan.org/tx/{hash}`
-  - `solana_devnet` -> `https://explorer.solana.com/tx/{hash}?cluster=devnet`
-  - `solana` -> `https://explorer.solana.com/tx/{hash}`
-  - `story_aeneid` -> `https://aeneid.storyscan.xyz/tx/{hash}`
-  - `story` -> `https://storyscan.xyz/tx/{hash}`
-- Shows a loading spinner while fetching
-- Shows "No transactions yet" empty state
-- Includes a refresh button
-- Status is shown as a colored badge (green for success, red for failed)
-- Recipient address is truncated with copy-on-click
-
-#### 4. Wallet Page: `src/pages/Wallet.tsx`
-
-- Import and render `TransactionHistory` below the Send Tokens form
-- Pass the agent ID (fetched from the agents table via user_id)
-- Add state for `agentId` and a useEffect to fetch it on mount
-- After a successful send, trigger a refresh of the transaction history
+This way, if the redirect somehow doesn't fire fast enough and the user sees the landing page, they get a relevant button instead of a confusing "Sign In".
 
 ---
-
-### Files Created
-
-| File | Purpose |
-|------|---------|
-| `src/components/wallet/TransactionHistory.tsx` | Transaction history table component with explorer links |
 
 ### Files Modified
 
 | File | Change |
 |------|--------|
-| `supabase/functions/agent-wallet/index.ts` | Record transactions in DB after `send_native_token`, `send_usdc`, `send_sol` |
-| `src/pages/Wallet.tsx` | Add agent ID fetching, render TransactionHistory component, trigger refresh after sends |
+| `src/pages/Index.tsx` | Import `useAuth` and `useNavigate`, add `useEffect` to redirect authenticated users to `/dashboard` |
+| `src/components/landing/Navbar.tsx` | Import `useAuth`, conditionally render "Dashboard" or "Sign In" button based on auth state |
 
-### Database Migration
-
-Creates `wallet_transactions` table with RLS policies scoped to agent ownership.
+### No database or backend changes required.
 
