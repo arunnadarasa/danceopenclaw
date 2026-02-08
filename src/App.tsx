@@ -17,6 +17,7 @@ import Network from "./pages/Network";
 import Docs from "./pages/Docs";
 import SettingsPage from "./pages/Settings";
 import Payments from "./pages/Payments";
+import MoltbookPage from "./pages/Moltbook";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -47,6 +48,7 @@ const App = () => (
               <Route path="/wallet" element={<WalletPage />} />
               <Route path="/payments" element={<Payments />} />
               <Route path="/network" element={<Network />} />
+              <Route path="/moltbook" element={<MoltbookPage />} />
               <Route path="/docs" element={<Docs />} />
               <Route path="/settings" element={<SettingsPage />} />
             </Route>

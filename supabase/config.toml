@@ -23,3 +23,6 @@ verify_jwt = false
 
 [functions.execute-x402-payment-solana]
 verify_jwt = false
+
+[functions.moltbook-proxy]
+verify_jwt = false

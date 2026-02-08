@@ -6,6 +6,7 @@ import {
   Wallet,
   CreditCard,
   Globe,
+  MessageSquare,
   BookOpen,
   Settings,
   X,
@@ -20,6 +21,7 @@ const navItems = [
   { to: "/wallet", label: "Wallet", icon: Wallet },
   { to: "/payments", label: "Payments", icon: CreditCard },
   { to: "/network", label: "Network", icon: Globe },
+  { to: "/moltbook", label: "Moltbook", icon: MessageSquare },
   { to: "/docs", label: "Docs", icon: BookOpen },
   { to: "/settings", label: "Settings", icon: Settings },
 ];

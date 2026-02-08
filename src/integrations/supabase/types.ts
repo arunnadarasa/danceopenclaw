@@ -150,6 +150,50 @@ export type Database = {
         }
         Relationships: []
       }
+      moltbook_connections: {
+        Row: {
+          agent_id: string | null
+          claim_status: string
+          claim_url: string | null
+          created_at: string
+          id: string
+          moltbook_agent_name: string
+          moltbook_api_key: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          agent_id?: string | null
+          claim_status?: string
+          claim_url?: string | null
+          created_at?: string
+          id?: string
+          moltbook_agent_name: string
+          moltbook_api_key: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          agent_id?: string | null
+          claim_status?: string
+          claim_url?: string | null
+          created_at?: string
+          id?: string
+          moltbook_agent_name?: string
+          moltbook_api_key?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "moltbook_connections_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       openclaw_connections: {
         Row: {
           agent_id: string | null
