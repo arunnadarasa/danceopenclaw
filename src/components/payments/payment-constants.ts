@@ -21,10 +21,10 @@ export const NETWORK_LABELS: Record<string, string> = {
 export const EXPLORER_URLS: Record<string, string> = {
   testnet: "https://sepolia.basescan.org/tx/",
   mainnet: "https://basescan.org/tx/",
-  "story-mainnet": "https://storyscan.xyz/tx/",
+  "story-mainnet": "https://www.storyscan.io/tx/",
   "base-sepolia": "https://sepolia.basescan.org/tx/",
   base: "https://basescan.org/tx/",
-  story: "https://storyscan.xyz/tx/",
+  story: "https://www.storyscan.io/tx/",
   solana: "https://explorer.solana.com/tx/",
   "solana-devnet": "https://explorer.solana.com/tx/",
 };

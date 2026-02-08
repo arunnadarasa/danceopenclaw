@@ -26,3 +26,6 @@ verify_jwt = false
 
 [functions.moltbook-proxy]
 verify_jwt = false
+
+[functions.x402-test-seller]
+verify_jwt = false
