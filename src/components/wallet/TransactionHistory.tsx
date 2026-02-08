@@ -79,6 +79,67 @@ function CopyableAddress({ address }: { address: string }) {
   );
 }
 
+/* ── Mobile card for a single transaction ── */
+function MobileTransactionCard({ tx }: { tx: Transaction }) {
+  return (
+    <div className="rounded-lg border border-border/50 bg-muted/30 p-3 space-y-2">
+      {/* Row 1: date + chain */}
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs text-muted-foreground whitespace-nowrap">
+          {new Date(tx.created_at).toLocaleDateString(undefined, {
+            month: "short",
+            day: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          })}
+        </span>
+        <span className="text-xs font-medium text-foreground">
+          {CHAIN_LABELS[tx.chain] || tx.chain}
+        </span>
+      </div>
+
+      {/* Row 2: token + amount + recipient */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Badge variant="outline" className="text-[10px] uppercase px-1.5 py-0">
+            {tx.token_type}
+          </Badge>
+          <span className="font-mono text-sm font-semibold text-foreground tabular-nums">
+            {tx.amount}
+          </span>
+        </div>
+        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+          <span>→</span>
+          <CopyableAddress address={tx.to_address} />
+        </div>
+      </div>
+
+      {/* Row 3: tx hash + status */}
+      <div className="flex items-center justify-between gap-2">
+        {tx.tx_hash ? (
+          <a
+            href={getExplorerUrl(tx.chain, tx.tx_hash)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 font-mono text-xs text-primary hover:underline"
+          >
+            {truncateAddress(tx.tx_hash)}
+            <ExternalLink className="h-3 w-3" />
+          </a>
+        ) : (
+          <span className="text-xs text-muted-foreground">—</span>
+        )}
+        <Badge
+          variant={tx.status === "success" ? "default" : "destructive"}
+          className="text-[10px] px-1.5 py-0"
+        >
+          {tx.status}
+        </Badge>
+      </div>
+    </div>
+  );
+}
+
 interface TransactionHistoryProps {
   agentId: string | null;
   refreshKey?: number;
@@ -135,72 +196,82 @@ export function TransactionHistory({ agentId, refreshKey }: TransactionHistoryPr
             No transactions yet. Send tokens to see history here.
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Chain</TableHead>
-                  <TableHead>Token</TableHead>
-                  <TableHead>Amount</TableHead>
-                  <TableHead>Recipient</TableHead>
-                  <TableHead>Tx Hash</TableHead>
-                  <TableHead>Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {transactions.map((tx) => (
-                  <TableRow key={tx.id}>
-                    <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                      {new Date(tx.created_at).toLocaleDateString(undefined, {
-                        month: "short",
-                        day: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </TableCell>
-                    <TableCell className="text-xs font-medium">
-                      {CHAIN_LABELS[tx.chain] || tx.chain}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="text-xs uppercase">
-                        {tx.token_type}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="font-mono text-xs">
-                      {tx.amount}
-                    </TableCell>
-                    <TableCell>
-                      <CopyableAddress address={tx.to_address} />
-                    </TableCell>
-                    <TableCell>
-                      {tx.tx_hash ? (
-                        <a
-                          href={getExplorerUrl(tx.chain, tx.tx_hash)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 font-mono text-xs text-primary hover:underline"
-                        >
-                          {truncateAddress(tx.tx_hash)}
-                          <ExternalLink className="h-3 w-3" />
-                        </a>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={tx.status === "success" ? "default" : "destructive"}
-                        className="text-xs"
-                      >
-                        {tx.status}
-                      </Badge>
-                    </TableCell>
+          <>
+            {/* Mobile: stacked cards */}
+            <div className="space-y-3 md:hidden">
+              {transactions.map((tx) => (
+                <MobileTransactionCard key={tx.id} tx={tx} />
+              ))}
+            </div>
+
+            {/* Desktop: table */}
+            <div className="hidden md:block overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Chain</TableHead>
+                    <TableHead>Token</TableHead>
+                    <TableHead>Amount</TableHead>
+                    <TableHead>Recipient</TableHead>
+                    <TableHead>Tx Hash</TableHead>
+                    <TableHead>Status</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+                </TableHeader>
+                <TableBody>
+                  {transactions.map((tx) => (
+                    <TableRow key={tx.id}>
+                      <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                        {new Date(tx.created_at).toLocaleDateString(undefined, {
+                          month: "short",
+                          day: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </TableCell>
+                      <TableCell className="text-xs font-medium">
+                        {CHAIN_LABELS[tx.chain] || tx.chain}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="text-xs uppercase">
+                          {tx.token_type}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="font-mono text-xs">
+                        {tx.amount}
+                      </TableCell>
+                      <TableCell>
+                        <CopyableAddress address={tx.to_address} />
+                      </TableCell>
+                      <TableCell>
+                        {tx.tx_hash ? (
+                          <a
+                            href={getExplorerUrl(tx.chain, tx.tx_hash)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 font-mono text-xs text-primary hover:underline"
+                          >
+                            {truncateAddress(tx.tx_hash)}
+                            <ExternalLink className="h-3 w-3" />
+                          </a>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={tx.status === "success" ? "default" : "destructive"}
+                          className="text-xs"
+                        >
+                          {tx.status}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </>
         )}
       </CardContent>
     </Card>

@@ -156,16 +156,16 @@ const WalletPage = () => {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5 sm:space-y-8">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
+          <div className="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-xl bg-primary/10">
             <Wallet className="h-5 w-5 text-primary" />
           </div>
           <div>
-            <h1 className="font-display text-2xl font-bold text-foreground">Agent Wallets</h1>
-            <p className="text-sm text-muted-foreground">
+            <h1 className="font-display text-xl sm:text-2xl font-bold text-foreground">Agent Wallets</h1>
+            <p className="text-xs sm:text-sm text-muted-foreground">
               Multi-chain wallet management via Privy server wallets
             </p>
           </div>
@@ -206,7 +206,7 @@ const WalletPage = () => {
 
       {/* Send forms */}
       {wallets.length > 0 && (
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div className="grid gap-6">
           <SendTokenForm
             wallets={wallets}
             onSendNative={handleSendNative}

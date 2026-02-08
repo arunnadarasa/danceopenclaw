@@ -88,7 +88,7 @@ export const CreateWalletPanel = ({ onCreateAll, onCreate, loading, existingChai
   return (
     <Card className="bg-gradient-card border-border/50 border-dashed">
       <CardHeader className="pb-3">
-        <CardTitle className="flex items-center justify-between">
+        <CardTitle className="flex flex-wrap items-center justify-between gap-2">
           <span className="flex items-center gap-2 font-display text-lg">
             <Plus className="h-5 w-5 text-accent" />
             Create Wallets
