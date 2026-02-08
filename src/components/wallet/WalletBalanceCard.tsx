@@ -34,7 +34,6 @@ const EXPLORER_URLS: Record<string, string> = {
   story: "https://storyscan.xyz/address/",
 };
 
-// Map chain keys to their family
 const CHAIN_TO_FAMILY: Record<string, string> = {
   base_sepolia: "base",
   base: "base",
@@ -66,7 +65,6 @@ export const WalletBalanceCard = ({ group, balances, balanceLoading }: WalletBal
     toast({ title: "Address copied", description: shortAddress });
   };
 
-  // Determine which explorer to link (prefer mainnet)
   const mainChain = group.mainnet?.chain || group.testnet?.chain || "";
   const explorerBase = EXPLORER_URLS[mainChain];
 
@@ -75,41 +73,46 @@ export const WalletBalanceCard = ({ group, balances, balanceLoading }: WalletBal
     const bal = balances[wallet.chain];
     const family = CHAIN_TO_FAMILY[wallet.chain] || group.family;
     const nativeUnit = FAMILY_META[family]?.nativeUnit || "?";
+    const faucets = wallet.network === "testnet" ? TESTNET_FAUCETS[wallet.chain] : undefined;
 
     return (
-      <div className="flex items-center justify-between rounded-lg bg-muted/40 px-3 py-2">
-        <div className="flex items-center gap-2">
-          <Badge
-            variant={wallet.network === "mainnet" ? "default" : "secondary"}
-            className="text-[10px] px-1.5 py-0"
-          >
-            {wallet.network}
-          </Badge>
-          <span className="text-xs text-muted-foreground">{label}</span>
-        </div>
-        <div className="text-right">
-          {balanceLoading ? (
-            <div className="h-4 w-16 animate-pulse rounded bg-muted" />
-          ) : bal?.error ? (
-            <span className="text-xs text-destructive">Error</span>
-          ) : (
-            <>
-              <p className="font-display text-sm font-semibold text-foreground tabular-nums">
-                {bal?.native_balance ?? "—"} {nativeUnit}
-              </p>
-              {bal?.usdc_balance && bal.usdc_balance !== "0" && bal.usdc_balance !== "0.00" && (
-                <p className="text-xs text-muted-foreground">
-                  {bal.usdc_balance} USDC
+      <div className="rounded-lg bg-muted/40 px-3 py-2 space-y-1.5">
+        {/* Row 1: badge + label + balance */}
+        <div className="flex items-center justify-between gap-2 min-w-0">
+          <div className="flex items-center gap-2 shrink-0">
+            <Badge
+              variant={wallet.network === "mainnet" ? "default" : "secondary"}
+              className="text-[10px] px-1.5 py-0"
+            >
+              {wallet.network}
+            </Badge>
+            <span className="text-xs text-muted-foreground">{label}</span>
+          </div>
+          <div className="text-right min-w-0">
+            {balanceLoading ? (
+              <div className="h-4 w-16 animate-pulse rounded bg-muted" />
+            ) : bal?.error ? (
+              <span className="text-xs text-destructive">Error</span>
+            ) : (
+              <>
+                <p className="font-display text-sm font-semibold text-foreground tabular-nums whitespace-nowrap">
+                  {bal?.native_balance ?? "—"} {nativeUnit}
                 </p>
-              )}
-            </>
-          )}
+                {bal?.usdc_balance && bal.usdc_balance !== "0" && bal.usdc_balance !== "0.00" && (
+                  <p className="text-xs text-muted-foreground whitespace-nowrap">
+                    {bal.usdc_balance} USDC
+                  </p>
+                )}
+              </>
+            )}
+          </div>
         </div>
-        {/* Faucet links for testnet rows */}
-        {wallet.network === "testnet" && TESTNET_FAUCETS[wallet.chain] && (
-          <div className="flex items-center gap-3 mt-1.5 justify-end">
-            <Droplets className="h-3 w-3 text-muted-foreground" />
-            {TESTNET_FAUCETS[wallet.chain].map((faucet) => (
+
+        {/* Row 2: Faucet links (testnet only) */}
+        {faucets && faucets.length > 0 && (
+          <div className="flex items-center gap-3 pt-0.5">
+            <Droplets className="h-3 w-3 text-muted-foreground shrink-0" />
+            {faucets.map((faucet) => (
               <a
                 key={faucet.token}
                 href={faucet.url}
@@ -129,11 +132,11 @@ export const WalletBalanceCard = ({ group, balances, balanceLoading }: WalletBal
 
   return (
     <Card className="bg-gradient-card border-border/50 overflow-hidden">
-      <CardContent className="p-5">
+      <CardContent className="p-3 sm:p-5">
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
-            <div className={`flex h-10 w-10 items-center justify-center rounded-xl text-lg ${meta.colorClass} text-white`}>
+            <div className={`flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-xl text-base sm:text-lg ${meta.colorClass} text-white`}>
               {meta.icon}
             </div>
             <p className="font-display text-lg font-semibold text-foreground">{meta.label}</p>
@@ -159,14 +162,8 @@ export const WalletBalanceCard = ({ group, balances, balanceLoading }: WalletBal
 
         {/* Network balances */}
         <div className="space-y-2">
-          {renderNetworkBalance(
-            group.testnet,
-            group.testnet?.label || "Testnet"
-          )}
-          {renderNetworkBalance(
-            group.mainnet,
-            group.mainnet?.label || "Mainnet"
-          )}
+          {renderNetworkBalance(group.testnet, group.testnet?.label || "Testnet")}
+          {renderNetworkBalance(group.mainnet, group.mainnet?.label || "Mainnet")}
         </div>
       </CardContent>
     </Card>
