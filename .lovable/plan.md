@@ -1,69 +1,108 @@
 
 
-## Fix Moltbook Registration and Improve Claim Flow
+## Build Shop, Events, Network (Mock Data) and Settings (Real)
 
-### Root Cause
+### Overview
 
-The Moltbook API returns credentials nested under an `agent` object:
+Build out the four placeholder pages into fully functional UIs. Shop, Events, and Network will use hardcoded mock data styled consistently with the existing dark-theme dashboard. Settings will be a real, functional page that reads/writes to the `profiles` and `agents` tables.
 
-```text
-{
-  "agent": {
-    "api_key": "moltbook_xxx",
-    "claim_url": "https://www.moltbook.com/claim/moltbook_claim_xxx",
-    "verification_code": "reef-X4B2"
-  }
-}
-```
+---
 
-Our edge function was looking for `mbData.api_key` instead of `mbData.agent.api_key`. This caused the API key to be `null`, which triggered the database not-null constraint error. The registration succeeded on Moltbook's side, but nothing was saved locally -- leaving you stuck.
+### 1. Shop Page (Mock Data)
 
-### Changes
+A dance merch marketplace layout with mock product cards.
 
-#### 1. Fix field mapping in `moltbook-proxy/index.ts`
+**Mock data**: 8-10 products (e.g., "Breaking Crew Tee", "Popping Gloves", "Dance Battle Hoodie") with prices in USDC, category tags, and placeholder images via `https://placehold.co`.
 
-Update the API key and claim URL extraction to check the nested `agent` object first (matching the actual Moltbook API response), with fallbacks for flat fields:
+**Layout**:
+- Page header with icon + title/subtitle (matching Wallet page pattern)
+- Filter chips for categories (Apparel, Accessories, Music, Gear)
+- Responsive product grid (`sm:grid-cols-2 lg:grid-cols-3`)
+- Each product card: image, title, price badge, category badge, "Add to Cart" button (disabled with "Coming Soon" tooltip)
 
-```text
-const agentObj = mbData.agent || {};
-const apiKey = agentObj.api_key || mbData.api_key || mbData.apiKey;
-const claimUrl = agentObj.claim_url || mbData.claim_url || mbData.claimUrl;
-const verificationCode = agentObj.verification_code || mbData.verification_code;
-```
+---
 
-Also store the `verification_code` in the database so the claim UI can display it.
+### 2. Events Page (Mock Data)
 
-#### 2. Handle 409 "name already taken" gracefully
+A dance events listing with battle, workshop, and cypher event types.
 
-When Moltbook returns 409, instead of just showing an error, the edge function will try up to 3 name variants by appending `_1`, `_2`, `_3`. If one succeeds, it stores that variant and returns the new name to the frontend.
+**Mock data**: 6-8 events with titles, dates, locations, event types, and attendee counts.
 
-If all retries fail, the error is passed back with suggested alternatives.
+**Layout**:
+- Page header with icon + title/subtitle
+- Tab filters: All, Battles, Workshops, Cyphers
+- Event cards in a vertical list or 2-column grid
+- Each card: date badge (month/day), title, location, event type badge, attendee count, "RSVP" button (disabled, "Coming Soon")
 
-#### 3. Add `verification_code` column to `moltbook_connections`
+---
 
-Add a nullable text column to store the verification code from Moltbook, so we can show it in the claim UI.
+### 3. Network Page (Mock Data)
 
-#### 4. Improve claim section in `Moltbook.tsx`
+A dancer discovery/social directory page.
 
-Update the pending-claim UI to:
-- Display the verification code the user needs to post on X/Twitter
-- Provide a pre-filled "Post to X" button that opens a tweet compose window with the verification code
-- Link to the user's Moltbook profile page
-- Show the claim URL as a fallback
+**Mock data**: 8-10 dancer profiles with names, dance styles, profile images (placeholder avatars), karma/follower counts, and online status.
 
-#### 5. Better error handling on frontend
+**Layout**:
+- Page header with icon + title/subtitle
+- Search input (non-functional, for visual purposes)
+- Responsive grid of profile cards (`sm:grid-cols-2 lg:grid-cols-3`)
+- Each card: avatar, display name, dance style badges, karma count, "Connect" button (disabled, "Coming Soon")
 
-When registration fails with "name already taken", show the alternative name that was used (if auto-retry succeeded) or suggest the user try a different name.
+---
 
-### Files Changed
+### 4. Settings Page (Real, Functional)
 
-| File | Action |
-|------|--------|
-| `supabase/functions/moltbook-proxy/index.ts` | Fix nested `agent` field mapping, add 409 retry logic, store verification_code |
-| `src/pages/Moltbook.tsx` | Improve claim UI with verification code display and "Post to X" button |
-| Database migration | Add `verification_code` column to `moltbook_connections` |
+A real settings page with two sections that read/write to the database.
 
-### About "PrinceYarjack"
+**Profile Section** (reads/writes `profiles` table):
+- Display name input
+- Bio textarea
+- Dance styles multi-select (same style chips as Onboarding page)
+- Wallet address input (read-only display if set)
+- Save button that calls `supabase.from("profiles").update(...)` 
 
-Since that name is already registered on Moltbook but no API key was saved locally, the app will automatically try `PrinceYarjack_1` (then `_2`, `_3`). The original unclaimed profile on Moltbook will remain as-is. This is the only recovery path since Moltbook has no key recovery endpoint.
+**Agent Section** (reads/writes `agents` table):
+- Agent name input
+- Budget limit input (numeric, USDC)
+- Auto-tip toggle (Switch component)
+- Agent status display (read-only badge)
+- Save button that calls `supabase.from("agents").update(...)`
+
+**Account Section** (read-only info + sign out):
+- Email display (from auth context)
+- Role display (from `user_roles` table)
+- Member since date
+- Sign out button
+
+**Data flow**:
+- On mount: fetch profile, agent, and role data using `useAuth()` user ID
+- Save handlers update the respective tables and show success/error toasts
+- Uses existing `supabase` client, `useAuth`, `toast` patterns
+
+---
+
+### Technical Details
+
+**Files created**:
+
+| File | Description |
+|------|-------------|
+| `src/pages/Shop.tsx` | Rewrite with mock product grid |
+| `src/pages/Events.tsx` | Rewrite with mock event listings |
+| `src/pages/Network.tsx` | Rewrite with mock dancer profiles |
+| `src/pages/Settings.tsx` | Full rewrite with real profile/agent/account settings |
+
+**No new dependencies** -- uses existing UI components (Card, Button, Input, Textarea, Badge, Tabs, Switch, Separator).
+
+**No database changes** -- Settings page uses existing `profiles`, `agents`, and `user_roles` tables which already have the correct RLS policies for user self-service updates.
+
+**No route changes** -- all four routes already exist in `App.tsx`.
+
+**Patterns followed**:
+- `space-y-6` page wrapper with icon + heading header (same as Wallet, Payments, Dashboard)
+- `font-display` for headings, `text-muted-foreground` for subtitles
+- Card components with `CardHeader`/`CardContent` for sections
+- Loading state with centered `Loader2` spinner
+- Toast notifications for save success/failure
+- Responsive grid with `sm:grid-cols-2 lg:grid-cols-3` breakpoints
 
