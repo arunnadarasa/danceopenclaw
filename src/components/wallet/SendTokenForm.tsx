@@ -18,6 +18,7 @@ interface SendTokenFormProps {
   wallets: WalletInfo[];
   onSendNative: (chain: string, to: string, value: string) => Promise<unknown>;
   onSendUsdc: (chain: string, to: string, amount: string) => Promise<unknown>;
+  onSendSol?: (chain: string, transaction: string) => Promise<unknown>;
   loading: boolean;
 }
 
@@ -25,18 +26,54 @@ type TokenType = "native" | "usdc";
 
 const USDC_CHAINS = ["base_sepolia", "base"];
 
-// Map chain keys to native token labels
+const SOLANA_RPC: Record<string, string> = {
+  solana_devnet: "https://api.devnet.solana.com",
+  solana: "https://api.mainnet-beta.solana.com",
+};
+
 function getNativeTokenLabel(chain: string): string {
   if (chain.startsWith("solana")) return "SOL";
   if (chain.startsWith("story")) return "IP";
   return "ETH";
 }
 
-export const SendTokenForm = ({ wallets, onSendNative, onSendUsdc, loading }: SendTokenFormProps) => {
+async function buildSolanaTransaction(
+  fromAddress: string,
+  toAddress: string,
+  amountSol: string,
+  rpcUrl: string
+): Promise<string> {
+  const { Connection, PublicKey, SystemProgram, Transaction, LAMPORTS_PER_SOL } = await import("@solana/web3.js");
+
+  const connection = new Connection(rpcUrl, "processed");
+  const fromPubkey = new PublicKey(fromAddress);
+  const toPubkey = new PublicKey(toAddress);
+  const lamports = Math.floor(parseFloat(amountSol) * LAMPORTS_PER_SOL);
+
+  const { blockhash } = await connection.getLatestBlockhash("processed");
+
+  const transaction = new Transaction();
+  transaction.recentBlockhash = blockhash;
+  transaction.feePayer = fromPubkey;
+  transaction.add(
+    SystemProgram.transfer({ fromPubkey, toPubkey, lamports })
+  );
+
+  const serialized = transaction.serialize({
+    requireAllSignatures: false,
+    verifySignatures: false,
+  });
+
+  // Convert to base64
+  return btoa(String.fromCharCode(...serialized));
+}
+
+export const SendTokenForm = ({ wallets, onSendNative, onSendUsdc, onSendSol, loading }: SendTokenFormProps) => {
   const [chain, setChain] = useState<string>("");
   const [tokenType, setTokenType] = useState<TokenType>("native");
   const [to, setTo] = useState("");
   const [amount, setAmount] = useState("");
+  const [sending, setSending] = useState(false);
 
   const selectedWallet = wallets.find((w) => w.chain === chain);
   const canSendUsdc = chain && USDC_CHAINS.includes(chain);
@@ -47,16 +84,26 @@ export const SendTokenForm = ({ wallets, onSendNative, onSendUsdc, loading }: Se
     e.preventDefault();
     if (!chain || !to || !amount) return;
 
+    setSending(true);
     try {
       if (tokenType === "usdc") {
         await onSendUsdc(chain, to, amount);
       } else if (isSolana) {
-        toast({
-          title: "Solana sends not yet supported",
-          description: "Solana native transfers require a serialized transaction. Use the API directly for now.",
-          variant: "destructive",
-        });
-        return;
+        // Build the Solana transaction client-side, then send via the send_sol action
+        if (!selectedWallet) throw new Error("No Solana wallet found");
+        if (!onSendSol) throw new Error("Solana send not available");
+
+        const rpcUrl = SOLANA_RPC[chain];
+        if (!rpcUrl) throw new Error(`No RPC URL for ${chain}`);
+
+        const serializedTx = await buildSolanaTransaction(
+          selectedWallet.address,
+          to,
+          amount,
+          rpcUrl
+        );
+
+        await onSendSol(chain, serializedTx);
       } else {
         // Convert human-readable amount to wei hex for EVM chains
         const weiValue = "0x" + (BigInt(Math.floor(parseFloat(amount) * 1e18))).toString(16);
@@ -71,6 +118,8 @@ export const SendTokenForm = ({ wallets, onSendNative, onSendUsdc, loading }: Se
         description: err instanceof Error ? err.message : "Unknown error",
         variant: "destructive",
       });
+    } finally {
+      setSending(false);
     }
   };
 
@@ -84,7 +133,7 @@ export const SendTokenForm = ({ wallets, onSendNative, onSendUsdc, loading }: Se
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Chain select — show ALL wallets */}
+          {/* Chain select */}
           <div className="space-y-2">
             <Label>Chain</Label>
             <Select value={chain} onValueChange={(v) => { setChain(v); setTokenType("native"); }}>
@@ -143,8 +192,8 @@ export const SendTokenForm = ({ wallets, onSendNative, onSendUsdc, loading }: Se
             />
           </div>
 
-          <Button type="submit" disabled={loading || !chain || !to || !amount} className="w-full">
-            {loading ? "Sending…" : "Send Transaction"}
+          <Button type="submit" disabled={loading || sending || !chain || !to || !amount} className="w-full">
+            {loading || sending ? "Sending…" : "Send Transaction"}
           </Button>
         </form>
       </CardContent>

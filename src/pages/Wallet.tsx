@@ -52,6 +52,7 @@ const WalletPage = () => {
     createAllWallets,
     sendNativeToken,
     sendUsdc,
+    sendSol,
   } = useAgentWallet();
 
   const { user } = useAuth();
@@ -133,6 +134,16 @@ const WalletPage = () => {
     return res;
   };
 
+  const handleSendSol = async (chain: string, transaction: string) => {
+    const res = await sendSol(chain, transaction);
+    if (res) {
+      toast({ title: "SOL transaction submitted" });
+      await fetchData();
+      setTxRefreshKey((k) => k + 1);
+    }
+    return res;
+  };
+
   const existingChains = wallets.map((w) => w.chain);
   const walletGroups = useMemo(() => groupWallets(wallets), [wallets]);
 
@@ -200,6 +211,7 @@ const WalletPage = () => {
             wallets={wallets}
             onSendNative={handleSendNative}
             onSendUsdc={handleSendUsdc}
+            onSendSol={handleSendSol}
             loading={loading}
           />
         </div>
