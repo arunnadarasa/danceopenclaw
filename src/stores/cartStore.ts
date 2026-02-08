@@ -20,8 +20,11 @@ interface CartStore {
   isLoading: boolean;
   isSyncing: boolean;
   addItem: (item: Omit<CartItem, "lineId">) => Promise<void>;
+  addLocalItem: (item: Omit<CartItem, "lineId">) => void;
   updateQuantity: (variantId: string, quantity: number) => Promise<void>;
+  updateLocalQuantity: (variantId: string, quantity: number) => void;
   removeItem: (variantId: string) => Promise<void>;
+  removeLocalItem: (variantId: string) => void;
   clearCart: () => void;
   syncCart: () => Promise<void>;
   getCheckoutUrl: () => string | null;
@@ -84,6 +87,22 @@ export const useCartStore = create<CartStore>()(
         }
       },
 
+      addLocalItem: (item) => {
+        const { items } = get();
+        const existing = items.find((i) => i.variantId === item.variantId);
+        if (existing) {
+          set({
+            items: items.map((i) =>
+              i.variantId === item.variantId
+                ? { ...i, quantity: i.quantity + item.quantity }
+                : i
+            ),
+          });
+        } else {
+          set({ items: [...items, { ...item, lineId: null }] });
+        }
+      },
+
       updateQuantity: async (variantId, quantity) => {
         if (quantity <= 0) {
           await get().removeItem(variantId);
@@ -110,6 +129,15 @@ export const useCartStore = create<CartStore>()(
         }
       },
 
+      updateLocalQuantity: (variantId, quantity) => {
+        if (quantity <= 0) {
+          get().removeLocalItem(variantId);
+          return;
+        }
+        const { items } = get();
+        set({ items: items.map((i) => (i.variantId === variantId ? { ...i, quantity } : i)) });
+      },
+
       removeItem: async (variantId) => {
         const { items, cartId, clearCart } = get();
         const item = items.find((i) => i.variantId === variantId);
@@ -130,6 +158,12 @@ export const useCartStore = create<CartStore>()(
         } finally {
           set({ isLoading: false });
         }
+      },
+
+      removeLocalItem: (variantId) => {
+        const { items } = get();
+        const newItems = items.filter((i) => i.variantId !== variantId);
+        set({ items: newItems });
       },
 
       clearCart: () => set({ items: [], cartId: null, checkoutUrl: null }),
