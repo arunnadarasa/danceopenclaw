@@ -25,7 +25,7 @@ interface SendTokenFormProps {
 type TokenType = "native" | "usdc";
 
 // Chains that support USDC sends (EVM + Solana)
-const USDC_CHAINS = ["base_sepolia", "base", "solana_devnet", "solana"];
+const USDC_CHAINS = ["base_sepolia", "base", "solana_devnet", "solana", "story"];
 
 const SOLANA_RPC: Record<string, string> = {
   solana_devnet: "https://api.devnet.solana.com",
