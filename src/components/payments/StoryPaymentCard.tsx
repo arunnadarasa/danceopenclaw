@@ -104,7 +104,7 @@ const StoryPaymentCard = ({ agentId, onPaymentComplete, payments = [], loadingHi
           </div>
         )}
 
-        {lastResult && !error && (
+        {lastResult && !error && lastResult.paymentExecuted && (
           <div className="rounded-lg border border-success/50 bg-success/10 p-4 space-y-2">
             <p className="text-sm font-medium text-success flex items-center gap-1.5">
               <CheckCircle2 className="h-4 w-4" />
@@ -116,6 +116,29 @@ const StoryPaymentCard = ({ agentId, onPaymentComplete, payments = [], loadingHi
               )}
               <p><span className="font-medium text-foreground">Network:</span> Story Mainnet</p>
               <p><span className="font-medium text-foreground">HTTP Status:</span> {lastResult.status}</p>
+              {(() => {
+                let txHash: string | null = null;
+                if (lastResult.xPaymentResponse) {
+                  try {
+                    const decoded = JSON.parse(atob(lastResult.xPaymentResponse));
+                    txHash = decoded.txHash || decoded.transactionHash || decoded.transaction || null;
+                  } catch { /* ignore */ }
+                }
+                return txHash ? (
+                  <p>
+                    <span className="font-medium text-foreground">Tx Hash:</span>{" "}
+                    <a
+                      href={getExplorerUrl("story-mainnet", txHash)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary hover:underline font-mono inline-flex items-center gap-1"
+                    >
+                      {txHash.slice(0, 12)}…{txHash.slice(-6)}
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                  </p>
+                ) : null;
+              })()}
               {lastResult.data && (
                 <div className="mt-2">
                   <span className="font-medium text-foreground">Response:</span>
@@ -127,6 +150,28 @@ const StoryPaymentCard = ({ agentId, onPaymentComplete, payments = [], loadingHi
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {lastResult && !error && !lastResult.paymentExecuted && (
+          <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-2">
+            <p className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
+              <AlertCircle className="h-4 w-4" />
+              No payment required — server returned HTTP {lastResult.status}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              The target URL did not return a 402 Payment Required response. No on-chain payment was executed.
+            </p>
+            {lastResult.data && (
+              <details className="mt-2">
+                <summary className="text-xs font-medium text-foreground cursor-pointer">View Response</summary>
+                <pre className="mt-1 rounded-md bg-muted p-2 text-xs overflow-x-auto whitespace-pre-wrap max-h-40">
+                  {typeof lastResult.data === "string"
+                    ? lastResult.data
+                    : JSON.stringify(lastResult.data, null, 2)}
+                </pre>
+              </details>
+            )}
           </div>
         )}
 
