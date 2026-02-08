@@ -1,9 +1,12 @@
 import { Button } from "@/components/ui/button";
-import { Zap } from "lucide-react";
+import { Zap, LayoutDashboard } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 import logoImg from "@/assets/Dance_OpenClaw.png";
 
 export const Navbar = () => {
+  const { session, loading } = useAuth();
+
   return (
     <nav className="sticky top-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-xl">
       <div className="container mx-auto flex items-center justify-between px-4 py-3">
@@ -29,12 +32,21 @@ export const Navbar = () => {
           </a>
         </div>
 
-        <Button asChild className="gap-2">
-          <Link to="/auth">
-            <Zap className="h-4 w-4" />
-            Sign In
-          </Link>
-        </Button>
+        {!loading && session ? (
+          <Button asChild className="gap-2">
+            <Link to="/dashboard">
+              <LayoutDashboard className="h-4 w-4" />
+              Dashboard
+            </Link>
+          </Button>
+        ) : (
+          <Button asChild className="gap-2">
+            <Link to="/auth">
+              <Zap className="h-4 w-4" />
+              Sign In
+            </Link>
+          </Button>
+        )}
       </div>
     </nav>
   );
