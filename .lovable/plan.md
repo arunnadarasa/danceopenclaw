@@ -1,120 +1,78 @@
 
 
-## Add x402 Payment Support
+## Add Transaction History to the Wallet Page
 
-Integrate the x402 HTTP payment protocol so your agent can pay for gated content using USDC across Base, Story, and Solana. This adds two new backend functions, a database table for payment history, a frontend hook, and a new Payments page in the dashboard.
-
----
-
-### Architecture Overview
-
-The x402 flow works like this:
-1. Agent makes an HTTP request to a target URL
-2. Server responds with HTTP 402 + payment requirements (amount, recipient, network)
-3. Agent signs a USDC payment (EIP-3009 for EVM chains, SPL transferChecked for Solana)
-4. Agent retries the request with a `PAYMENT-SIGNATURE` header containing the signed payment
-5. The facilitator settles the payment on-chain and returns the content
+Add a transaction history table below the Send Tokens form on the Wallet page, showing all native token and USDC sends with links to the relevant block explorer for each chain.
 
 ---
 
-### What Gets Created
+### Changes Required
 
-#### 1. Database: `agent_payments` table (migration)
+#### 1. Database: Create `wallet_transactions` table (migration)
 
-A new table to track all x402 payment history:
+A new table to record every send from the wallet page:
 
 | Column | Type | Notes |
 |--------|------|-------|
-| `id` | UUID | Primary key |
-| `agent_id` | UUID | References agents table |
-| `wallet_address` | TEXT | Wallet that paid |
-| `recipient_address` | TEXT | Who received payment |
-| `amount` | TEXT | Human-readable USDC amount |
-| `network` | TEXT | Chain network used |
-| `target_url` | TEXT | URL that required payment |
-| `tx_hash` | TEXT | On-chain transaction hash (nullable) |
-| `status` | TEXT | pending / success / failed |
+| `id` | UUID | Primary key, auto-generated |
+| `agent_id` | UUID | References the agent that owns the wallet |
+| `chain` | TEXT | Chain key (e.g. `base_sepolia`, `solana_devnet`, `story_aeneid`) |
+| `token_type` | TEXT | `native` or `usdc` |
+| `from_address` | TEXT | Sender wallet address |
+| `to_address` | TEXT | Recipient address |
+| `amount` | TEXT | Human-readable amount sent |
+| `tx_hash` | TEXT | Transaction hash (nullable -- set on success) |
+| `status` | TEXT | `success` or `failed`, default `success` |
 | `error_message` | TEXT | Error details (nullable) |
 | `created_at` | TIMESTAMPTZ | Auto-set |
 
-RLS policies: Users can INSERT and SELECT their own payments (matched via agent_id ownership).
+RLS policies:
+- SELECT: Users can view transactions for agents they own (via agents table user_id check)
+- INSERT: Restricted to service role only (edge function inserts with service client)
 
-#### 2. Edge Function: `execute-x402-payment` (EVM -- Base + Story)
+#### 2. Edge Function: `supabase/functions/agent-wallet/index.ts`
 
-Handles x402 payments on EVM chains using EIP-3009 `TransferWithAuthorization` signatures via Privy.
+After each successful `send_native_token`, `send_usdc`, and `send_sol` action, insert a record into `wallet_transactions` using the existing `serviceClient`.
 
-Key adaptations from the reference:
-- **No `agent_wallets` table** -- instead reads from `agents.config.privy_wallets` JSONB (matching this project's architecture)
-- Accepts `agentId`, `targetUrl`, `network` (testnet/mainnet/story-mainnet), `maxAmount`, optional `method` and `body`
-- Supports both x402 v1 and v2 payload formats
-- Signs EIP-712 typed data via Privy server wallet RPC
-- Records payment in `agent_payments` table
-- Uses correct EIP-712 domain names per chain:
-  - Base Sepolia: `"USDC"`, version `"2"`
-  - Base Mainnet: `"USD Coin"`, version `"2"`
-  - Story Mainnet: `"Bridged USDC (Stargate)"`, version `"2"`
+For `send_native_token` (around line 526):
+- Extract tx hash from `txResult.data?.hash`
+- Convert the hex wei value back to human-readable amount
+- Insert with `token_type: "native"`
 
-#### 3. Edge Function: `execute-x402-payment-solana` (Solana)
+For `send_usdc` (around line 577):
+- Extract tx hash from `txResult.data?.hash`
+- Use the original `body.amount` for readable amount
+- Insert with `token_type: "usdc"`
 
-Handles x402 payments on Solana using SPL Token `transferChecked` instruction.
+For `send_sol` (around line 650):
+- Use the `txHash` from broadcast result
+- Insert with `token_type: "native"`
 
-Key differences from EVM:
-- Builds a Solana transaction with exactly 3 instructions (computeUnitLimit, computeUnitPrice, transferChecked)
-- Uses the facilitator's public key (from `extra.feePayer` in 402 response) as fee payer
-- Signs via Privy `signTransaction` (partial sign only -- facilitator co-signs and submits)
-- Reads wallet from `agents.config.privy_wallets` where `chain_type === "solana"`
+#### 3. New Component: `src/components/wallet/TransactionHistory.tsx`
 
-#### 4. Frontend Hook: `src/hooks/useX402Payment.ts`
+A card component that:
+- Accepts `agentId` as a prop
+- Queries `wallet_transactions` from the database ordered by `created_at` descending, limited to 20 rows
+- Displays a table with columns: Date, Chain, Token, Amount, Recipient, Tx Hash, Status
+- The Tx Hash column links to the correct block explorer based on the `chain` value:
+  - `base_sepolia` -> `https://sepolia.basescan.org/tx/{hash}`
+  - `base` -> `https://basescan.org/tx/{hash}`
+  - `solana_devnet` -> `https://explorer.solana.com/tx/{hash}?cluster=devnet`
+  - `solana` -> `https://explorer.solana.com/tx/{hash}`
+  - `story_aeneid` -> `https://aeneid.storyscan.xyz/tx/{hash}`
+  - `story` -> `https://storyscan.xyz/tx/{hash}`
+- Shows a loading spinner while fetching
+- Shows "No transactions yet" empty state
+- Includes a refresh button
+- Status is shown as a colored badge (green for success, red for failed)
+- Recipient address is truncated with copy-on-click
 
-A React hook wrapping both edge functions:
+#### 4. Wallet Page: `src/pages/Wallet.tsx`
 
-```text
-const { executePayment, loading, error, lastResult } = useX402Payment();
-
-// EVM payment
-await executePayment({
-  agentId: "...",
-  targetUrl: "https://example.com/paid-content",
-  network: "testnet",
-  maxAmount: "1.00",
-});
-
-// Solana payment
-await executePayment({
-  agentId: "...",
-  targetUrl: "https://x402.org/api/weather",
-  network: "solana-testnet",
-  maxAmount: "1.00",
-});
-```
-
-The hook automatically routes to the correct edge function based on the network parameter.
-
-#### 5. Frontend Page: `src/pages/Payments.tsx`
-
-A new dashboard page with two sections:
-
-**Section A -- Test x402 Payment**
-- Input field for target URL (pre-filled with a test endpoint)
-- Network selector (Base Sepolia, Base Mainnet, Story Mainnet, Solana Devnet, Solana Mainnet)
-- Max amount input (default $1.00)
-- "Execute Payment" button
-- Result display showing: status, payment amount, response data, tx hash
-
-**Section B -- Payment History**
-- Table showing recent payments from `agent_payments`
-- Columns: date, target URL, amount, network, status, tx hash (linked to explorer)
-
-#### 6. Navigation: Add "Payments" to sidebar
-
-Add a new nav item in the sidebar between "Wallet" and "Network":
-- Label: "Payments"
-- Icon: `CreditCard` from lucide-react
-- Route: `/payments`
-
-#### 7. Route: Register `/payments` in App.tsx
-
-Add the new route inside the protected dashboard layout.
+- Import and render `TransactionHistory` below the Send Tokens form
+- Pass the agent ID (fetched from the agents table via user_id)
+- Add state for `agentId` and a useEffect to fetch it on mount
+- After a successful send, trigger a refresh of the transaction history
 
 ---
 
@@ -122,24 +80,16 @@ Add the new route inside the protected dashboard layout.
 
 | File | Purpose |
 |------|---------|
-| `supabase/functions/execute-x402-payment/index.ts` | EVM x402 payment client (Base + Story) |
-| `supabase/functions/execute-x402-payment-solana/index.ts` | Solana x402 payment client |
-| `src/hooks/useX402Payment.ts` | Frontend hook for x402 payments |
-| `src/pages/Payments.tsx` | Payments dashboard page |
+| `src/components/wallet/TransactionHistory.tsx` | Transaction history table component with explorer links |
 
 ### Files Modified
 
 | File | Change |
 |------|--------|
-| `supabase/config.toml` | Add function entries for both new edge functions |
-| `src/App.tsx` | Add `/payments` route |
-| `src/components/dashboard/Sidebar.tsx` | Add Payments nav item |
+| `supabase/functions/agent-wallet/index.ts` | Record transactions in DB after `send_native_token`, `send_usdc`, `send_sol` |
+| `src/pages/Wallet.tsx` | Add agent ID fetching, render TransactionHistory component, trigger refresh after sends |
 
 ### Database Migration
 
-Creates `agent_payments` table with RLS policies for user-scoped access.
-
-### Secrets Required
-
-Both `PRIVY_APP_ID` and `PRIVY_APP_SECRET` are already configured -- no new secrets needed.
+Creates `wallet_transactions` table with RLS policies scoped to agent ownership.
 
