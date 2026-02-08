@@ -1,48 +1,51 @@
 
 
-## Add USDC Support for Story Mainnet
+## Display Friendly Network Names in x402 Payments
 
-### Current State
+### Problem
 
-- **Balance display works**: The backend already fetches USDC.e balance for Story mainnet using address `0xF1815bd50389c46847f0Bda824eC8da914045D14` (visible as "0.10 USDC" in the screenshot)
-- **Sending is blocked**: Story is not listed in `USDC_CONTRACTS` (backend) or `USDC_CHAINS` (frontend), so the Token dropdown only shows "Native (IP)" when Story is selected
+The payment success result and payment history table currently show raw network identifiers like "mainnet", "testnet", "story-mainnet" instead of human-readable names like "Base Mainnet", "Base Sepolia (Testnet)".
 
-### Changes
+### Solution
 
-#### 1. `supabase/functions/agent-wallet/index.ts` -- Backend
+Add a network display name mapping and use it in two places:
 
-Add Story mainnet to the `USDC_CONTRACTS` map so the `send_usdc` action supports it:
+1. **Payment success result** (line 223) -- where it says `Network: mainnet`
+2. **Payment history table** (line 269) -- the Network column
+
+### File: `src/pages/Payments.tsx`
+
+**1. Add a display name map** (near the existing constants at the top):
 
 ```typescript
-const USDC_CONTRACTS: Record<string, string> = {
-  base_sepolia: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
-  base:         "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-  story:        "0xF1815bd50389c46847f0Bda824eC8da914045D14",  // USDC.e via Stargate
+const NETWORK_LABELS: Record<string, string> = {
+  testnet: "Base Sepolia",
+  mainnet: "Base Mainnet",
+  "story-mainnet": "Story Mainnet",
+  "solana-testnet": "Solana Devnet",
+  "solana-mainnet": "Solana Mainnet",
+  // Values stored in DB by edge functions
+  "base-sepolia": "Base Sepolia",
+  base: "Base Mainnet",
+  story: "Story Mainnet",
+  "solana-devnet": "Solana Devnet",
+  solana: "Solana Mainnet",
 };
 ```
 
-The existing `send_usdc` action already handles EVM ERC-20 transfers using `eth_sendTransaction` with the standard `transfer(address,uint256)` calldata. Since Story is EVM-compatible, this works without any other backend changes.
+This covers both the values used locally (e.g. `testnet`) and the values stored in the database by the edge functions (e.g. `base-sepolia`, `base`).
 
-#### 2. `src/components/wallet/SendTokenForm.tsx` -- Frontend
-
-Add `"story"` to the `USDC_CHAINS` array so the Token selector shows the USDC option when Story mainnet is selected:
+**2. Update the success result display** to use the map:
 
 ```typescript
-const USDC_CHAINS = ["base_sepolia", "base", "solana_devnet", "solana", "story"];
+<p><span className="font-medium text-foreground">Network:</span> {NETWORK_LABELS[lastResult.network || ""] || lastResult.network}</p>
 ```
 
-The send flow already routes Story through the `onSendUsdc` handler (EVM path), so no other frontend changes are needed.
+**3. Update the payment history table** to use the map:
 
-### What This Enables
+```typescript
+<TableCell className="text-xs">{NETWORK_LABELS[p.network] || p.network}</TableCell>
+```
 
-When the user selects "Story (mainnet)" in the Send Tokens form, the Token dropdown will now show both "Native (IP)" and "USDC" options. Selecting USDC will send a standard ERC-20 `transfer` call to the USDC.e contract on Story mainnet via the Privy wallet.
-
-### Files Modified
-
-| File | Change |
-|------|--------|
-| `supabase/functions/agent-wallet/index.ts` | Add `story` to `USDC_CONTRACTS` |
-| `src/components/wallet/SendTokenForm.tsx` | Add `"story"` to `USDC_CHAINS` |
-
-### No database changes required.
+### No backend or database changes required.
 
