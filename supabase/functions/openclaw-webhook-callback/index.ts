@@ -46,20 +46,25 @@ serve(async (req) => {
       );
     }
 
-    // Validate webhook token against the user's stored token
-    if (webhookToken) {
-      const { data: conn } = await serviceClient
-        .from("openclaw_connections")
-        .select("webhook_token")
-        .eq("user_id", task.user_id)
-        .single();
+    // Validate webhook token (required)
+    if (!webhookToken) {
+      return new Response(
+        JSON.stringify({ error: "webhookToken is required" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
-      if (conn && conn.webhook_token !== webhookToken) {
-        return new Response(
-          JSON.stringify({ error: "Invalid webhook token" }),
-          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
+    const { data: conn } = await serviceClient
+      .from("openclaw_connections")
+      .select("webhook_token")
+      .eq("user_id", task.user_id)
+      .single();
+
+    if (!conn || conn.webhook_token !== webhookToken) {
+      return new Response(
+        JSON.stringify({ error: "Invalid webhook token" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     // Update the task
