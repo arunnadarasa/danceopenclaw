@@ -5,6 +5,8 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Button } from "@/components/ui/button";
 import { streamChat, type ChatMessage as StreamMessage } from "@/lib/openclaw-stream";
+import { useChatConversations } from "@/hooks/useChatConversations";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -19,6 +21,10 @@ export const OpenClawChat = () => {
   const [isStreaming, setIsStreaming] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  const { user } = useAuth();
+  const { createConversation, saveMessage, renameConversation } = useChatConversations();
+  const widgetConvIdRef = useRef<string | null>(null);
+
   const scrollToBottom = useCallback(() => {
     requestAnimationFrame(() => {
       if (scrollRef.current) {
@@ -31,6 +37,18 @@ export const OpenClawChat = () => {
     scrollToBottom();
   }, [messages, open, scrollToBottom]);
 
+  const ensureConversation = async (firstMessage: string): Promise<string | null> => {
+    if (widgetConvIdRef.current) return widgetConvIdRef.current;
+    if (!user) return null;
+    try {
+      const conv = await createConversation(firstMessage.slice(0, 50));
+      widgetConvIdRef.current = conv.id;
+      return conv.id;
+    } catch {
+      return null;
+    }
+  };
+
   const handleSend = async () => {
     const trimmed = input.trim();
     if (!trimmed || isLoading) return;
@@ -42,6 +60,16 @@ export const OpenClawChat = () => {
     const userMsg: ChatMessage = { role: "user", content: trimmed };
     const updatedMessages = [...messages, userMsg];
     setMessages(updatedMessages);
+
+    // Persist user message
+    const convId = await ensureConversation(trimmed);
+    if (convId) {
+      saveMessage(convId, "user", trimmed).catch(() => {});
+      // Auto-title on first message
+      if (messages.length === 0) {
+        renameConversation(convId, trimmed.slice(0, 50)).catch(() => {});
+      }
+    }
 
     let assistantContent = "";
 
@@ -67,6 +95,10 @@ export const OpenClawChat = () => {
         onDone: () => {
           setIsLoading(false);
           setIsStreaming(false);
+          // Persist assistant response
+          if (convId && assistantContent) {
+            saveMessage(convId, "assistant", assistantContent).catch(() => {});
+          }
         },
         onError: (error) => {
           setIsLoading(false);
@@ -177,7 +209,7 @@ export const OpenClawChat = () => {
                 </div>
               ))}
 
-              {/* Thinking indicator — shows until first token arrives */}
+              {/* Thinking indicator */}
               {isLoading && !isStreaming && (
                 <div className="flex justify-start">
                   <div className="bg-muted text-muted-foreground rounded-xl rounded-bl-sm px-3 py-2 text-sm flex items-center gap-2">
