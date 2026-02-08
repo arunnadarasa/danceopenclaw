@@ -1,102 +1,124 @@
 
 
-## Add Full-Screen Chat Page with Persistent Conversations
+## Multi-Feature Update: Shop Cart, Mobile Fixes, and Docs Link
 
-### Overview
+### 1. Shop Page -- Add Shopify Cart System
 
-Add a dedicated Chat page (ChatGPT-style) in the sidebar with conversation persistence. Conversations started in the floating chatbot widget will also be saved and visible on this page. The page features a sidebar of past conversations, the ability to start new chats, and full message history stored in the database.
+The Shopify store (`krump-flow-riakh.myshopify.com`) is connected but has **no products yet**. The plan is to wire up real Shopify integration alongside the existing mock display, so when products are added later they appear automatically.
 
-### Database
+**New files:**
 
-Two new tables:
+| File | Purpose |
+|------|---------|
+| `src/lib/shopify.ts` | Storefront API helper (`storefrontApiRequest`), GraphQL queries, cart mutations, types |
+| `src/stores/cartStore.ts` | Zustand persistent cart store (items, cartId, checkoutUrl, add/remove/update/clear) |
+| `src/hooks/useCartSync.ts` | Hook to sync cart on page visibility change (clears completed orders) |
+| `src/hooks/useShopifyProducts.ts` | Hook to fetch products from Storefront API, with fallback to mock data if store is empty |
+| `src/components/shop/CartDrawer.tsx` | Slide-out cart drawer (Sheet) with item list, quantity controls, total, and "Checkout with Shopify" button |
+| `src/components/shop/ProductCard.tsx` | Individual product card with "Add to Cart" button |
 
-**`chat_conversations`** -- stores each conversation thread
-- `id` (uuid, PK, default gen_random_uuid())
-- `user_id` (uuid, not null) -- references the authenticated user
-- `title` (text, default 'New Chat') -- auto-generated from first message
-- `created_at` (timestamptz, default now())
-- `updated_at` (timestamptz, default now())
+**Modified files:**
 
-**`chat_messages`** -- stores individual messages within a conversation
-- `id` (uuid, PK, default gen_random_uuid())
-- `conversation_id` (uuid, not null, FK to chat_conversations.id ON DELETE CASCADE)
-- `role` (text, not null) -- 'user' or 'assistant'
-- `content` (text, not null)
-- `created_at` (timestamptz, default now())
+| File | Change |
+|------|--------|
+| `src/pages/Shop.tsx` | Use `useShopifyProducts` hook; show real Shopify products when available, fall back to mock grid; add CartDrawer trigger in header |
+| `src/App.tsx` | Add `useCartSync()` call |
 
-RLS policies:
-- Users can only SELECT, INSERT, UPDATE, DELETE their own conversations
-- Users can only SELECT, INSERT their own messages (via join to conversations)
+**Install:** `zustand` package for cart state management.
 
-### New Files
+**Key behaviors:**
+- Products are fetched from Shopify Storefront API on page load
+- If the store has no products, the current mock product grid is shown with "Coming Soon" buttons (no cart integration for mocks)
+- When real Shopify products exist, product cards get "Add to Cart" buttons that create/update a Shopify cart via the Storefront API
+- Cart drawer shows item count badge, line items with quantity controls, and a checkout button that opens Shopify checkout in a new tab with `channel=online_store` parameter
+- Cart state persists in localStorage via Zustand
 
-**`src/pages/Chat.tsx`** -- Full-screen chat page
-- Left panel: scrollable list of past conversations with titles and timestamps, "New Chat" button at top
-- Main panel: full-height message area with markdown rendering (reusing the same ReactMarkdown + remarkGfm setup as the floating widget)
-- Bottom input bar with send button
-- On selecting a conversation, loads its messages from `chat_messages`
-- On sending a message, saves it to the database, streams the response via `openclaw-chat`, and saves the assistant reply when done
-- Auto-generates conversation title from the first user message (truncated to ~50 chars)
-- Responsive: on mobile, conversation list becomes a collapsible drawer
+---
 
-**`src/hooks/useChatConversations.ts`** -- React hook for conversation CRUD
-- `fetchConversations()` -- loads all conversations for the user, ordered by `updated_at` desc
-- `createConversation(title)` -- inserts a new conversation row
-- `deleteConversation(id)` -- deletes a conversation (cascades messages)
-- `renameConversation(id, title)` -- updates the title
-- `fetchMessages(conversationId)` -- loads all messages for a conversation
-- `saveMessage(conversationId, role, content)` -- inserts a message and updates `updated_at` on the conversation
+### 2. Mobile View Fix -- x402 Payments Page
 
-### Modified Files
+**Problems visible in the screenshot:**
+- Payment cards overflow horizontally (URL inputs are too wide for the viewport)
+- The floating chat button overlaps content at the bottom
+- Card titles get cut off ("Story Mainnet x402 Payme...")
 
-**`src/components/dashboard/Sidebar.tsx`** -- Add "Chat" nav item between "Network" and "Moltbook" with `MessageCircle` icon pointing to `/chat`
+**Changes to `src/components/payments/EchoTestPaymentCard.tsx`:**
+- Change the inner grid from `md:grid-cols-2` to stack all fields vertically on mobile (`grid-cols-1 md:grid-cols-2`)
+- Add `break-all` or `truncate` to the Target URL input wrapper
+- Make the execute button full-width on mobile (`w-full md:w-auto` instead of `w-full sm:w-auto`)
 
-**`src/App.tsx`** -- Add `/chat` route inside the authenticated dashboard layout
+**Changes to `src/components/payments/StoryPaymentCard.tsx`:**
+- Same grid fix: ensure fields stack on small screens
+- Truncate the card title on mobile -- wrap the title text with `truncate` or use responsive text sizes
+- Make the "On-chain" badge wrap below the title on very small screens
 
-**`src/components/dashboard/OpenClawChat.tsx`** -- Update the floating widget to also persist messages:
-- When sending a message from the widget, save it to a "widget" conversation in the database
-- When receiving a complete assistant response (`onDone`), save it too
-- This way, conversations started in the widget appear on the Chat page
+**Changes to `src/components/payments/PaymentHistoryTable.tsx`:**
+- On mobile, switch from table to a stacked card layout using a responsive check
+- Each payment becomes a compact card showing date, amount, status, and tx hash
 
-### Chat Page Layout
+**Changes to `src/pages/Payments.tsx`:**
+- Add responsive header sizing matching other pages (`text-xl sm:text-2xl`, icon prefix)
 
-```text
-+---------------------+---------------------------------------------+
-| Conversations       |  Chat Title                                 |
-|---------------------|---------------------------------------------|
-| [+ New Chat]        |                                             |
-|                     |  [user bubble]     "hello, who are..."      |
-| > Today             |                                             |
-|   Krump History     |  [assistant bubble] "Yo! Krump was..."      |
-|   Dance Moves       |                                             |
-|                     |                                             |
-| > Yesterday         |                                             |
-|   Token Transfer    |                                             |
-|                     |                                             |
-|                     |---------------------------------------------|
-|                     |  [input]                         [Send]     |
-+---------------------+---------------------------------------------+
-```
+---
 
-### Message Flow
+### 3. Mobile View Fix -- Chat Page
 
-1. User types a message and hits send
-2. Message is saved to `chat_messages` with role='user'
-3. Full conversation history is sent to `openclaw-chat` edge function for streaming
-4. Tokens stream in and render progressively (same as floating widget)
-5. When streaming completes (`onDone`), the full assistant response is saved to `chat_messages` with role='assistant'
-6. The conversation's `updated_at` is bumped, and the title is auto-set from the first user message if it's still "New Chat"
+**Problems visible in the screenshot:**
+- The conversation sidebar takes up the full width on mobile, leaving the chat area invisible (text "Sele..." is clipped behind it)
+- The input bar is hidden behind the floating chat widget
+- No way to dismiss the sidebar and see the chat on mobile
 
-### Technical Details
+**Changes to `src/pages/Chat.tsx`:**
+- On mobile (`< md`), the conversation sidebar should default to **closed** instead of open
+- When open on mobile, the sidebar should overlay the chat area (absolute positioning with a backdrop) instead of pushing it off-screen
+- Tapping a conversation on mobile should auto-close the sidebar to reveal the chat
+- The sidebar toggle button should be always visible in the top bar
+- Reduce message bubble max-width from `max-w-[75%]` to `max-w-[90%]` on mobile for better readability
+- Add `pb-20` or similar bottom padding to avoid the floating chat widget overlapping the input
 
-| File | Action | Description |
-|------|--------|-------------|
-| Database migration | Create | `chat_conversations` and `chat_messages` tables with RLS |
-| `src/hooks/useChatConversations.ts` | Create | Hook for conversation and message CRUD |
-| `src/pages/Chat.tsx` | Create | Full-screen ChatGPT-style chat page |
-| `src/components/dashboard/Sidebar.tsx` | Edit | Add "Chat" nav item |
-| `src/App.tsx` | Edit | Add `/chat` route |
-| `src/components/dashboard/OpenClawChat.tsx` | Edit | Persist widget messages to database |
+**Implementation approach:**
+- Use `useIsMobile()` hook to detect mobile
+- On mobile: sidebar becomes an overlay (`fixed inset-0 z-50`) with backdrop, auto-closes when a conversation is selected
+- On desktop: sidebar remains inline as it is now
 
-No new dependencies required -- reuses existing ReactMarkdown, remarkGfm, framer-motion, and the `streamChat` helper from `@/lib/openclaw-stream`.
+---
+
+### 4. Add DigitalOcean Marketplace Docs Link
+
+**Changes to `src/pages/Docs.tsx`:**
+- Update the `DOCS_URL` constant from the current community tutorials URL to `https://docs.digitalocean.com/products/marketplace/catalog/openclaw/`
+- Add a second link alongside the existing one for the marketplace catalog page
+- Keep both links: the tutorial link for setup instructions and the new marketplace catalog link for the official listing
+
+**Changes to `src/components/dashboard/OpenClawConnectionCard.tsx`:**
+- Add the marketplace catalog link next to the existing "DigitalOcean setup guide" link
+- Add a second link: "Marketplace listing" pointing to `https://docs.digitalocean.com/products/marketplace/catalog/openclaw/`
+
+**Changes to `src/pages/Dashboard.tsx`:**
+- Add a small info card or link section below the existing grid with a link to the DigitalOcean docs
+
+---
+
+### Summary of All Files
+
+| File | Action |
+|------|--------|
+| `src/lib/shopify.ts` | Create -- Storefront API helper, queries, cart mutations |
+| `src/stores/cartStore.ts` | Create -- Zustand cart store with Shopify sync |
+| `src/hooks/useCartSync.ts` | Create -- Cart sync on visibility change |
+| `src/hooks/useShopifyProducts.ts` | Create -- Fetch products from Storefront API |
+| `src/components/shop/CartDrawer.tsx` | Create -- Cart drawer component |
+| `src/components/shop/ProductCard.tsx` | Create -- Product card with Add to Cart |
+| `src/pages/Shop.tsx` | Rewrite -- Real Shopify integration with mock fallback |
+| `src/App.tsx` | Edit -- Add useCartSync hook |
+| `src/components/payments/EchoTestPaymentCard.tsx` | Edit -- Mobile-responsive grid and sizing |
+| `src/components/payments/StoryPaymentCard.tsx` | Edit -- Mobile-responsive title and grid |
+| `src/components/payments/PaymentHistoryTable.tsx` | Edit -- Mobile card layout |
+| `src/pages/Payments.tsx` | Edit -- Responsive header |
+| `src/pages/Chat.tsx` | Edit -- Mobile sidebar overlay, auto-close, padding |
+| `src/pages/Docs.tsx` | Edit -- Add marketplace catalog URL |
+| `src/components/dashboard/OpenClawConnectionCard.tsx` | Edit -- Add marketplace docs link |
+| `src/pages/Dashboard.tsx` | Edit -- Add docs link card |
+
+**New dependency:** `zustand` (for cart state management)
 
