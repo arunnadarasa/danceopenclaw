@@ -228,14 +228,24 @@ export const OpenClawConnectionCard = () => {
           </p>
         )}
 
-        <a
-          href="https://www.digitalocean.com/community/tutorials/how-to-run-openclaw"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-        >
-          DigitalOcean setup guide <ExternalLink className="h-3 w-3" />
-        </a>
+        <div className="flex flex-wrap gap-x-3 gap-y-1">
+          <a
+            href="https://www.digitalocean.com/community/tutorials/how-to-run-openclaw"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+          >
+            Setup guide <ExternalLink className="h-3 w-3" />
+          </a>
+          <a
+            href="https://docs.digitalocean.com/products/marketplace/catalog/openclaw/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+          >
+            Marketplace listing <ExternalLink className="h-3 w-3" />
+          </a>
+        </div>
 
         {/* Quick Setup Tips */}
         <div className="rounded-lg border border-border bg-secondary/50 p-4 space-y-3">
