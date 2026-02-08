@@ -251,6 +251,56 @@ export type Database = {
         }
         Relationships: []
       }
+      wallet_transactions: {
+        Row: {
+          agent_id: string
+          amount: string
+          chain: string
+          created_at: string
+          error_message: string | null
+          from_address: string
+          id: string
+          status: string
+          to_address: string
+          token_type: string
+          tx_hash: string | null
+        }
+        Insert: {
+          agent_id: string
+          amount: string
+          chain: string
+          created_at?: string
+          error_message?: string | null
+          from_address: string
+          id?: string
+          status?: string
+          to_address: string
+          token_type: string
+          tx_hash?: string | null
+        }
+        Update: {
+          agent_id?: string
+          amount?: string
+          chain?: string
+          created_at?: string
+          error_message?: string | null
+          from_address?: string
+          id?: string
+          status?: string
+          to_address?: string
+          token_type?: string
+          tx_hash?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wallet_transactions_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       wallets: {
         Row: {
           created_at: string
