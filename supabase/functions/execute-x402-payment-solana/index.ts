@@ -16,7 +16,7 @@ const corsHeaders = {
 
 const SOLANA_NETWORKS = {
   mainnet: {
-    rpcUrl: "https://api.mainnet-beta.solana.com",
+    rpcUrl: Deno.env.get("SOLANA_MAINNET_RPC_URL") || "https://api.mainnet-beta.solana.com",
     usdcMint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
     network: "solana",
     walletChainKey: "solana",

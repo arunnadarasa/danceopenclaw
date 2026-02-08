@@ -156,42 +156,16 @@ export const SendTokenForm = ({ wallets, onSendNative, onSendUsdc, onSendSol, lo
     setSending(true);
     try {
       if (tokenType === "usdc" && isSolana) {
-        // Build Solana USDC (SPL token) transaction client-side
-        if (!selectedWallet) throw new Error("No Solana wallet found");
+        // Send raw params to backend — backend builds tx server-side (avoids CORS/403)
         if (!onSendSol) throw new Error("Solana send not available");
-
-        const rpcUrl = SOLANA_RPC[chain];
-        const usdcMint = SOLANA_USDC_MINTS[chain];
-        if (!rpcUrl || !usdcMint) throw new Error(`No USDC config for ${chain}`);
-
-        const serializedTx = await buildSolanaUsdcTransaction(
-          selectedWallet.address,
-          to,
-          amount,
-          rpcUrl,
-          usdcMint
-        );
-
-        await onSendSol(chain, serializedTx, { token_type: "usdc", to_address: to, amount });
+        await onSendSol(chain, "", { token_type: "usdc", to_address: to, amount });
       } else if (tokenType === "usdc") {
         // EVM USDC (Base)
         await onSendUsdc(chain, to, amount);
       } else if (isSolana) {
-        // Native SOL transfer
-        if (!selectedWallet) throw new Error("No Solana wallet found");
+        // Native SOL transfer — send raw params to backend
         if (!onSendSol) throw new Error("Solana send not available");
-
-        const rpcUrl = SOLANA_RPC[chain];
-        if (!rpcUrl) throw new Error(`No RPC URL for ${chain}`);
-
-        const serializedTx = await buildSolanaTransaction(
-          selectedWallet.address,
-          to,
-          amount,
-          rpcUrl
-        );
-
-        await onSendSol(chain, serializedTx, { token_type: "native", to_address: to, amount });
+        await onSendSol(chain, "", { token_type: "native", to_address: to, amount });
       } else {
         // EVM native (ETH/IP)
         const weiValue = "0x" + (BigInt(Math.floor(parseFloat(amount) * 1e18))).toString(16);
