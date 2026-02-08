@@ -134,10 +134,10 @@ const WalletPage = () => {
     return res;
   };
 
-  const handleSendSol = async (chain: string, transaction: string) => {
-    const res = await sendSol(chain, transaction);
+  const handleSendSol = async (chain: string, transaction: string, meta?: { token_type?: string; to_address?: string; amount?: string }) => {
+    const res = await sendSol(chain, transaction, meta);
     if (res) {
-      toast({ title: "SOL transaction submitted" });
+      toast({ title: meta?.token_type === "usdc" ? "USDC transaction submitted" : "SOL transaction submitted" });
       await fetchData();
       setTxRefreshKey((k) => k + 1);
     }

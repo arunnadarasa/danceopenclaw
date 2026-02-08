@@ -89,8 +89,8 @@ export function useAgentWallet() {
   const sendUsdc = useCallback((chain: string, to: string, amount: string) =>
     wrap(() => callWallet("send_usdc", { chain, to, amount })), [wrap]);
 
-  const sendSol = useCallback((chain: string, transaction: string) =>
-    wrap(() => callWallet("send_sol", { chain, transaction })), [wrap]);
+  const sendSol = useCallback((chain: string, transaction: string, meta?: { token_type?: string; to_address?: string; amount?: string }) =>
+    wrap(() => callWallet("send_sol", { chain, transaction, ...(meta || {}) })), [wrap]);
 
   return {
     loading,
