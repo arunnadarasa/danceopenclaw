@@ -4,14 +4,30 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Globe, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Globe, Loader2, AlertCircle, CheckCircle2, ExternalLink } from "lucide-react";
+import { type PaymentRecord } from "./PaymentHistoryTable";
+import { getExplorerUrl } from "./payment-constants";
 
 interface StoryPaymentCardProps {
   agentId: string | null;
   onPaymentComplete: () => void;
+  payments?: PaymentRecord[];
+  loadingHistory?: boolean;
 }
 
-const StoryPaymentCard = ({ agentId, onPaymentComplete }: StoryPaymentCardProps) => {
+const statusBadge = (status: string) => {
+  switch (status) {
+    case "success":
+      return <Badge className="bg-success/20 text-success border-success/30"><CheckCircle2 className="h-3 w-3 mr-1" />Success</Badge>;
+    case "failed":
+      return <Badge variant="destructive"><AlertCircle className="h-3 w-3 mr-1" />Failed</Badge>;
+    default:
+      return <Badge variant="secondary"><Loader2 className="h-3 w-3 mr-1 animate-spin" />Pending</Badge>;
+  }
+};
+
+const StoryPaymentCard = ({ agentId, onPaymentComplete, payments = [], loadingHistory = false }: StoryPaymentCardProps) => {
   const { executePayment, loading, error, lastResult } = useX402Payment();
   const [targetUrl, setTargetUrl] = useState("https://storyx402.lovable.app/");
   const [maxAmount, setMaxAmount] = useState("1.00");
@@ -113,6 +129,59 @@ const StoryPaymentCard = ({ agentId, onPaymentComplete }: StoryPaymentCardProps)
             </div>
           </div>
         )}
+
+        {/* Compact Story Payment History */}
+        <div className="mt-2 border-t border-border pt-4">
+          <h4 className="text-sm font-medium mb-3">Recent Story Payments</h4>
+          {loadingHistory ? (
+            <div className="flex items-center justify-center py-4">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : payments.length === 0 ? (
+            <p className="text-center py-4 text-xs text-muted-foreground">No Story payments yet.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-xs h-8 px-2">Date</TableHead>
+                    <TableHead className="text-xs h-8 px-2">Amount</TableHead>
+                    <TableHead className="text-xs h-8 px-2">Status</TableHead>
+                    <TableHead className="text-xs h-8 px-2">Tx Hash</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {payments.map((p) => (
+                    <TableRow key={p.id}>
+                      <TableCell className="text-xs whitespace-nowrap px-2 py-2">
+                        {new Date(p.created_at).toLocaleString()}
+                      </TableCell>
+                      <TableCell className="text-xs whitespace-nowrap px-2 py-2">
+                        {p.amount} USDC.e
+                      </TableCell>
+                      <TableCell className="px-2 py-2">{statusBadge(p.status)}</TableCell>
+                      <TableCell className="px-2 py-2">
+                        {p.tx_hash ? (
+                          <a
+                            href={getExplorerUrl(p.network, p.tx_hash)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 text-xs text-primary hover:underline font-mono"
+                          >
+                            {p.tx_hash.slice(0, 8)}…
+                            <ExternalLink className="h-3 w-3" />
+                          </a>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </div>
       </CardContent>
     </Card>
   );
