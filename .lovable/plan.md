@@ -1,75 +1,121 @@
 
 
-## Mobile-Friendly Wallet UX Improvements
+## Fix Solana Mainnet Payment (403 RPC Error)
 
-### Problems Identified (from screenshot)
+### Root Cause
 
-1. **Balance values clipped** -- "0.000090 ETH" and "19.00 USDC" are cut off at the right edge because the network balance row crams badge + label + balance + faucet links into a single `flex justify-between` row
-2. **Faucet links share a row with balance** -- They act as a third flex child, causing overflow on narrow screens
-3. **Transaction history table** -- 7-column table forces horizontal scrolling on mobile, making it hard to read
-4. **Page header** -- Title + Refresh button could collide on small screens
-5. **Card padding** -- Fixed `p-5` padding is too generous on small screens
+The Solana public mainnet RPC (`https://api.mainnet-beta.solana.com`) blocks or rate-limits browser requests, returning **403 Access Forbidden**. The current flow builds transactions client-side in `SendTokenForm.tsx`, which requires fetching a recent blockhash from this RPC -- and that fails.
+
+### Solution: Move Transaction Building to the Backend
+
+Instead of building Solana transactions in the browser (which needs RPC access), move the transaction building to the `agent-wallet` backend function, which can reliably call the RPC from the server side.
+
+### Current Flow (broken for mainnet)
+
+```text
+Browser (SendTokenForm)              Backend (agent-wallet)
+  |                                     |
+  |-- fetch blockhash from RPC -------> X (403 Forbidden)
+  |-- build unsigned transaction        |
+  |-- serialize & send to backend ----> |
+  |                                     |-- sign via Privy
+  |                                     |-- broadcast via RPC
+  |                                     |-- return result
+```
+
+### New Flow (works for all networks)
+
+```text
+Browser (SendTokenForm)              Backend (agent-wallet)
+  |                                     |
+  |-- send {to, amount, chain} -------> |
+  |                                     |-- fetch blockhash from RPC (server-side, no CORS)
+  |                                     |-- build unsigned transaction
+  |                                     |-- sign via Privy
+  |                                     |-- broadcast via RPC
+  |                                     |-- return result
+```
 
 ---
 
 ### Changes by File
 
-#### 1. `src/components/wallet/WalletBalanceCard.tsx`
+#### 1. `supabase/functions/agent-wallet/index.ts` -- Backend transaction building
 
-- **Fix balance row layout**: Restructure `renderNetworkBalance` so the faucet links render on their own row below the badge/balance row, instead of being a sibling in the same flex container
-- **Prevent text clipping**: Add `min-w-0` to the balance container and `whitespace-nowrap` to balance values so they don't wrap or clip
-- **Responsive padding**: Change card padding from `p-5` to `p-3 sm:p-5`
-- **Smaller chain icon on mobile**: Reduce icon from `h-10 w-10` to `h-8 w-8 sm:h-10 sm:w-10`
+Update the `send_sol` action to accept **either**:
+- A pre-built serialized transaction (existing behavior, kept for backward compat)
+- Raw parameters (`to`, `amount`, `token_type`) to build the transaction server-side
 
-#### 2. `src/components/wallet/TransactionHistory.tsx`
+When raw parameters are provided (no `transaction` field), the edge function will:
+1. Fetch the recent blockhash from the Solana RPC
+2. Build the appropriate transaction (native SOL transfer or USDC SPL transfer)
+3. Sign via Privy
+4. Broadcast via RPC
 
-- **Card-based layout on mobile**: Replace the table with a stacked card layout on screens below `md` breakpoint
-- Each transaction renders as a compact card showing date, chain, token badge, amount, recipient (copyable), tx hash link, and status badge
-- Keep the existing table for `md` and above using `hidden md:block` / `md:hidden`
+Also add support for an optional `SOLANA_MAINNET_RPC_URL` environment variable so a custom RPC provider (e.g., Helius, QuickNode) can be used instead of the public endpoint.
 
-#### 3. `src/pages/Wallet.tsx`
+#### 2. `src/components/wallet/SendTokenForm.tsx` -- Simplify client-side code
 
-- **Responsive header**: Wrap the header so title and Refresh button stack on very small screens -- change from `flex items-center justify-between` to include `flex-wrap gap-3`
-- **Reduce section spacing on mobile**: Change `space-y-8` to `space-y-5 sm:space-y-8`
-- **Send form grid**: Change `lg:grid-cols-2` to full-width on all screens since there's only one form anyway
+For Solana transactions, instead of building the transaction client-side (which requires RPC access), simply send the raw parameters to the backend:
+- Remove client-side `buildSolanaTransaction` and `buildSolanaUsdcTransaction` calls for the send flow
+- Send `{ chain, to_address, amount, token_type }` directly to `onSendSol`
+- Keep the `SOLANA_RPC` and build functions as they may be useful elsewhere, but the send flow won't use them
 
-#### 4. `src/components/wallet/CreateWalletPanel.tsx`
+#### 3. `supabase/functions/execute-x402-payment-solana/index.ts` -- Use configurable RPC
 
-- Minor: ensure the "Create All Wallets" button wraps properly on mobile by adjusting the header flex layout
+Update to also check for `SOLANA_MAINNET_RPC_URL` env var before falling back to the public endpoint, for consistent behavior.
 
 ---
 
 ### Technical Details
 
-**WalletBalanceCard -- new balance row structure:**
-```text
-Before (single flex row, 3 children):
-  [badge + label] [balance] [faucet links]  <- overflows on mobile
+**New `send_sol` server-side transaction building (in agent-wallet):**
 
-After (two rows):
-  [badge + label]                [balance]
-  [faucet icon] [ETH Faucet] [USDC Faucet]  <- own row, only for testnet
+When `body.transaction` is not provided but `body.to_address` and `body.amount` are:
+
+For **native SOL** transfers:
+- Use `SystemProgram.transfer` instruction
+- Set `feePayer` to the wallet's public key
+- Fetch `recentBlockhash` server-side
+
+For **USDC SPL** transfers:
+- Compute ATAs for sender and recipient
+- Check if recipient ATA exists; if not, add a `createAssociatedTokenAccount` instruction
+- Add `transferChecked` instruction with 6 decimals
+- (Reuses the same approach currently in `SendTokenForm.tsx`)
+
+**RPC URL resolution:**
+
+```typescript
+function getSolanaRpcUrl(chainKey: string): string {
+  if (chainKey === "solana") {
+    return Deno.env.get("SOLANA_MAINNET_RPC_URL") || "https://api.mainnet-beta.solana.com";
+  }
+  return "https://api.devnet.solana.com";
+}
 ```
 
-**TransactionHistory -- mobile card layout:**
-```text
-Each transaction card on mobile:
-  +------------------------------------+
-  | Jan 15, 10:30     Base Sepolia     |
-  | ETH  0.001         -> 0x68d8...9A7 |
-  | Tx: 0xabc1...f4e2          success |
-  +------------------------------------+
+**SendTokenForm simplified Solana flow:**
+
+```typescript
+// Before: build tx client-side, send serialized tx
+const serializedTx = await buildSolanaTransaction(wallet.address, to, amount, rpcUrl);
+await onSendSol(chain, serializedTx, { token_type: "native", to_address: to, amount });
+
+// After: just send params, backend builds tx
+await onSendSol(chain, "", { token_type: "native", to_address: to, amount });
 ```
 
-The table stays for desktop (`md:` and up) to keep the existing clean look.
+The `useAgentWallet` hook's `sendSol` function signature stays the same -- the `transaction` field becomes optional/empty and the backend handles building it.
+
+---
 
 ### Files Modified
 
 | File | Change |
 |------|--------|
-| `src/components/wallet/WalletBalanceCard.tsx` | Fix balance row overflow, move faucets to own row, responsive padding/sizing |
-| `src/components/wallet/TransactionHistory.tsx` | Add mobile card layout alongside existing table |
-| `src/pages/Wallet.tsx` | Responsive header, tighter mobile spacing |
-| `src/components/wallet/CreateWalletPanel.tsx` | Responsive header flex wrap |
+| `supabase/functions/agent-wallet/index.ts` | Add server-side Solana tx building in `send_sol` when no pre-built tx provided; add configurable RPC URL |
+| `src/components/wallet/SendTokenForm.tsx` | Stop building Solana txs client-side; send raw params to backend instead |
+| `supabase/functions/execute-x402-payment-solana/index.ts` | Use configurable `SOLANA_MAINNET_RPC_URL` env var |
 
-### No database or backend changes required.
+### No database changes required.
