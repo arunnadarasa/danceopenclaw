@@ -523,6 +523,26 @@ serve(async (req) => {
             },
           }
         );
+        const nativeTxHash = txResult.data?.hash || txResult.hash;
+
+        // Record transaction
+        try {
+          const weiValue = body.value.startsWith("0x") ? BigInt(body.value) : BigInt(body.value);
+          const readableAmount = (Number(weiValue) / 1e18).toString();
+          await serviceClient.from("wallet_transactions").insert({
+            agent_id: agent.id,
+            chain: chainKey,
+            token_type: "native",
+            from_address: wallet.address,
+            to_address: body.to,
+            amount: readableAmount,
+            tx_hash: nativeTxHash || null,
+            status: "success",
+          });
+        } catch (e) {
+          console.error("Failed to record native tx:", e);
+        }
+
         result = { chain: chainKey, network: chainInfo.network, ...txResult };
         break;
       }
@@ -567,6 +587,24 @@ serve(async (req) => {
             },
           }
         );
+        const usdcTxHash = txResult.data?.hash || txResult.hash;
+
+        // Record USDC transaction
+        try {
+          await serviceClient.from("wallet_transactions").insert({
+            agent_id: agent.id,
+            chain: chainKey,
+            token_type: "usdc",
+            from_address: wallet.address,
+            to_address: body.to,
+            amount: body.amount,
+            tx_hash: usdcTxHash || null,
+            status: "success",
+          });
+        } catch (e) {
+          console.error("Failed to record USDC tx:", e);
+        }
+
         result = {
           chain: chainKey,
           network: chainInfo.network,
@@ -647,6 +685,23 @@ serve(async (req) => {
           }
 
           const txHash = broadcastData.result;
+
+          // Record SOL transaction
+          try {
+            await serviceClient.from("wallet_transactions").insert({
+              agent_id: agent.id,
+              chain: chainKey,
+              token_type: "native",
+              from_address: wallet.address,
+              to_address: "solana_tx",
+              amount: "0",
+              tx_hash: txHash || null,
+              status: "success",
+            });
+          } catch (e) {
+            console.error("Failed to record SOL tx:", e);
+          }
+
           result = { chain: chainKey, network: chainInfo?.network, txHash, data: { hash: txHash } };
         } else {
           return jsonError("Provide a serialized transaction in base64 format as 'transaction'");

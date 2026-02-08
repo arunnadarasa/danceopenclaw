@@ -4,7 +4,10 @@ import { Button } from "@/components/ui/button";
 import { WalletBalanceCard, WalletGroup } from "@/components/wallet/WalletBalanceCard";
 import { SendTokenForm } from "@/components/wallet/SendTokenForm";
 import { CreateWalletPanel } from "@/components/wallet/CreateWalletPanel";
+import { TransactionHistory } from "@/components/wallet/TransactionHistory";
 import { useAgentWallet, WalletInfo, BalanceInfo } from "@/hooks/useAgentWallet";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 
 // Maps each chain key to its family name
@@ -51,10 +54,14 @@ const WalletPage = () => {
     sendUsdc,
   } = useAgentWallet();
 
+  const { user } = useAuth();
+
   const [wallets, setWallets] = useState<WalletInfo[]>([]);
   const [balances, setBalances] = useState<Record<string, BalanceInfo>>({});
   const [initialLoading, setInitialLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [agentId, setAgentId] = useState<string | null>(null);
+  const [txRefreshKey, setTxRefreshKey] = useState(0);
 
   const fetchData = useCallback(async () => {
     const walletsRes = await getWallets();
@@ -74,6 +81,19 @@ const WalletPage = () => {
   useEffect(() => {
     fetchData();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Fetch agent ID for transaction history
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from("agents")
+      .select("id")
+      .eq("user_id", user.id)
+      .single()
+      .then(({ data }) => {
+        if (data) setAgentId(data.id);
+      });
+  }, [user]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -98,6 +118,7 @@ const WalletPage = () => {
     if (res) {
       toast({ title: "Transaction submitted" });
       await fetchData();
+      setTxRefreshKey((k) => k + 1);
     }
     return res;
   };
@@ -107,6 +128,7 @@ const WalletPage = () => {
     if (res) {
       toast({ title: "USDC transaction submitted" });
       await fetchData();
+      setTxRefreshKey((k) => k + 1);
     }
     return res;
   };
@@ -182,6 +204,9 @@ const WalletPage = () => {
           />
         </div>
       )}
+
+      {/* Transaction History */}
+      <TransactionHistory agentId={agentId} refreshKey={txRefreshKey} />
 
       {/* Empty state */}
       {wallets.length === 0 && !initialLoading && (
