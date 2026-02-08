@@ -10,15 +10,15 @@ const corsHeaders = {
 const PRIVY_API_URL = "https://api.privy.io/v1";
 
 // ─── Chain Registry ────────────────────────────────────────────────────────────
-const CHAIN_REGISTRY: Record<string, { chain_type: string; chain_id?: number; label: string; network: "testnet" | "mainnet" }> = {
+const CHAIN_REGISTRY: Record<string, { chain_type: string; chain_id?: number; caip2?: string; label: string; network: "testnet" | "mainnet" }> = {
   // Testnets
-  base_sepolia:   { chain_type: "ethereum", chain_id: 84532,  label: "Base Sepolia",    network: "testnet" },
-  solana_devnet:  { chain_type: "solana",                      label: "Solana Devnet",   network: "testnet" },
-  story_aeneid:   { chain_type: "ethereum", chain_id: 1315,   label: "Story Aeneid",    network: "testnet" },
+  base_sepolia:   { chain_type: "ethereum", chain_id: 84532,  caip2: "eip155:84532",  label: "Base Sepolia",    network: "testnet" },
+  solana_devnet:  { chain_type: "solana",   caip2: "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1", label: "Solana Devnet",   network: "testnet" },
+  story_aeneid:   { chain_type: "ethereum", chain_id: 1315,   caip2: "eip155:1315",   label: "Story Aeneid",    network: "testnet" },
   // Mainnets
-  base:           { chain_type: "ethereum", chain_id: 8453,   label: "Base",            network: "mainnet" },
-  solana:         { chain_type: "solana",                      label: "Solana",          network: "mainnet" },
-  story:          { chain_type: "ethereum", chain_id: 1514,   label: "Story",           network: "mainnet" },
+  base:           { chain_type: "ethereum", chain_id: 8453,   caip2: "eip155:8453",   label: "Base",            network: "mainnet" },
+  solana:         { chain_type: "solana",   caip2: "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp", label: "Solana",          network: "mainnet" },
+  story:          { chain_type: "ethereum", chain_id: 1514,   caip2: "eip155:1514",   label: "Story",           network: "mainnet" },
 };
 
 // USDC contract addresses per chain
@@ -505,7 +505,7 @@ serve(async (req) => {
         if (wallet.chain_type !== "ethereum") return jsonError("Use send_sol for Solana transactions");
         if (!body.to || !body.value) return jsonError("to and value are required");
 
-        const resolvedChainId = body.chainId || chainInfo.chain_id;
+        if (!chainInfo.caip2) return jsonError(`No CAIP-2 identifier for ${chainKey}`);
 
         const txResult = await privyFetch(
           `/wallets/${wallet.id}/rpc`,
@@ -514,11 +514,11 @@ serve(async (req) => {
           PRIVY_APP_SECRET,
           {
             method: "eth_sendTransaction",
+            caip2: chainInfo.caip2,
             params: {
               transaction: {
                 to: body.to,
                 value: body.value,
-                chain_id: resolvedChainId,
               },
             },
           }
@@ -539,6 +539,7 @@ serve(async (req) => {
         if (wallet.chain_type !== "ethereum") return jsonError("USDC transfers only supported on EVM chains");
         if (!usdcAddress) return jsonError(`USDC not available on ${chainInfo.label}. Available on: ${Object.keys(USDC_CONTRACTS).join(", ")}`);
         if (!body.to || !body.amount) return jsonError("to and amount are required. Amount is in USDC units (e.g. '1.50' for $1.50)");
+        if (!chainInfo.caip2) return jsonError(`No CAIP-2 identifier for ${chainKey}`);
 
         const parts = body.amount.toString().split(".");
         const whole = parts[0] || "0";
@@ -549,8 +550,6 @@ serve(async (req) => {
           padAddress(body.to).replace("0x", "") +
           encodeUint256(rawAmount);
 
-        const resolvedChainId = body.chainId || chainInfo.chain_id;
-
         const txResult = await privyFetch(
           `/wallets/${wallet.id}/rpc`,
           "POST",
@@ -558,12 +557,12 @@ serve(async (req) => {
           PRIVY_APP_SECRET,
           {
             method: "eth_sendTransaction",
+            caip2: chainInfo.caip2,
             params: {
               transaction: {
                 to: usdcAddress,
                 data: calldata,
                 value: "0x0",
-                chain_id: resolvedChainId,
               },
             },
           }
@@ -583,24 +582,72 @@ serve(async (req) => {
       case "send_sol": {
         const chainKey = body.chain === "solana" ? "solana" : resolveChainKey(body.chain, "solana_devnet");
         const wallet = wallets[chainKey];
+        const chainInfo = CHAIN_REGISTRY[chainKey];
 
         if (!wallet) return jsonError(`No Solana wallet found for ${chainKey}. Create one first.`);
 
         if (body.transaction) {
-          const txResult = await privyFetch(
+          // Step 1: Sign-only via Privy (NOT signAndSendTransaction — causes blockhash mismatch)
+          const signResult = await privyFetch(
             `/wallets/${wallet.id}/rpc`,
             "POST",
             PRIVY_APP_ID,
             PRIVY_APP_SECRET,
             {
-              method: "signAndSendTransaction",
+              method: "signTransaction",
               params: {
                 transaction: body.transaction,
                 encoding: "base64",
               },
             }
           );
-          result = { chain: chainKey, network: CHAIN_REGISTRY[chainKey]?.network, ...txResult };
+
+          const signedTxBase64 = signResult.data?.signed_transaction || signResult.signed_transaction;
+          if (!signedTxBase64) {
+            return jsonError("No signed transaction returned from Privy");
+          }
+
+          // Step 2: Broadcast via RPC
+          const solConfig = SOLANA_NETWORKS[chainKey];
+          if (!solConfig) return jsonError(`No Solana RPC config for ${chainKey}`);
+
+          const signedTxBytes = Uint8Array.from(atob(signedTxBase64), c => c.charCodeAt(0));
+          const bs58Chars = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+          // Simple base58 encode for sendTransaction
+          let num = BigInt(0);
+          for (const byte of signedTxBytes) {
+            num = num * BigInt(256) + BigInt(byte);
+          }
+          let bs58 = "";
+          while (num > 0) {
+            const remainder = Number(num % BigInt(58));
+            bs58 = bs58Chars[remainder] + bs58;
+            num = num / BigInt(58);
+          }
+          // Handle leading zeros
+          for (const byte of signedTxBytes) {
+            if (byte === 0) bs58 = "1" + bs58;
+            else break;
+          }
+
+          const broadcastRes = await fetch(solConfig.rpcUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              jsonrpc: "2.0",
+              id: 1,
+              method: "sendTransaction",
+              params: [bs58, { encoding: "base58", skipPreflight: false, preflightCommitment: "processed" }],
+            }),
+          });
+
+          const broadcastData = await broadcastRes.json();
+          if (broadcastData.error) {
+            return jsonError(`Solana broadcast error: ${JSON.stringify(broadcastData.error)}`);
+          }
+
+          const txHash = broadcastData.result;
+          result = { chain: chainKey, network: chainInfo?.network, txHash, data: { hash: txHash } };
         } else {
           return jsonError("Provide a serialized transaction in base64 format as 'transaction'");
         }
@@ -611,16 +658,18 @@ serve(async (req) => {
       case "sign_message": {
         const chainKey = resolveChainKey(body.chain);
         const wallet = wallets[chainKey];
+        const chainInfoSign = CHAIN_REGISTRY[chainKey];
 
         if (!wallet || !body.message) return jsonError("Wallet not found or message missing");
 
         if (wallet.chain_type === "ethereum") {
+          if (!chainInfoSign?.caip2) return jsonError(`No CAIP-2 identifier for ${chainKey}`);
           const signResult = await privyFetch(
             `/wallets/${wallet.id}/rpc`,
             "POST",
             PRIVY_APP_ID,
             PRIVY_APP_SECRET,
-            { method: "personal_sign", params: { message: body.message } }
+            { method: "personal_sign", caip2: chainInfoSign.caip2, params: { message: body.message } }
           );
           result = { chain: chainKey, ...signResult };
         } else if (wallet.chain_type === "solana") {
