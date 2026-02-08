@@ -126,7 +126,14 @@ export default function MoltbookPage() {
             .eq("user_id", user.id)
             .single();
 
-          if (agent) setAgentName(agent.name.replace(/\s+/g, "_"));
+          if (agent) {
+            // Sanitize: only alphanumeric, underscores, hyphens; 3-30 chars
+            const sanitized = agent.name
+              .replace(/\s+/g, "_")
+              .replace(/[^a-zA-Z0-9_-]/g, "")
+              .slice(0, 30);
+            setAgentName(sanitized.length >= 3 ? sanitized : "Agent_001");
+          }
 
           const { data: roleRow } = await supabase
             .from("user_roles")
@@ -147,7 +154,17 @@ export default function MoltbookPage() {
   }, [user]);
 
   // --- Actions ---
+  const isValidName = /^[a-zA-Z0-9_-]{3,30}$/.test(agentName);
+
   const handleRegister = async () => {
+    if (!isValidName) {
+      toast({
+        title: "Invalid agent name",
+        description: "Name must be 3-30 characters, using only letters, numbers, underscores, or hyphens.",
+        variant: "destructive",
+      });
+      return;
+    }
     setRegistering(true);
     try {
       const result = await callMoltbookProxy("register", {
@@ -298,9 +315,13 @@ export default function MoltbookPage() {
               <label className="text-sm font-medium">Agent Name</label>
               <Input
                 value={agentName}
-                onChange={(e) => setAgentName(e.target.value)}
+                onChange={(e) => setAgentName(e.target.value.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 30))}
                 placeholder="DanceOpenClaw_Agent"
+                className={agentName && !isValidName ? "border-destructive" : ""}
               />
+              {agentName && !isValidName && (
+                <p className="text-xs text-destructive">3-30 chars, letters/numbers/underscores/hyphens only</p>
+              )}
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Description</label>
