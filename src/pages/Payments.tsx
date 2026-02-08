@@ -31,6 +31,19 @@ const NETWORK_OPTIONS = [
   { value: "solana-mainnet", label: "Solana Mainnet" },
 ] as const;
 
+const NETWORK_LABELS: Record<string, string> = {
+  testnet: "Base Sepolia",
+  mainnet: "Base Mainnet",
+  "story-mainnet": "Story Mainnet",
+  "solana-testnet": "Solana Devnet",
+  "solana-mainnet": "Solana Mainnet",
+  "base-sepolia": "Base Sepolia",
+  base: "Base Mainnet",
+  story: "Story Mainnet",
+  "solana-devnet": "Solana Devnet",
+  solana: "Solana Mainnet",
+};
+
 const EXPLORER_URLS: Record<string, string> = {
   testnet: "https://sepolia.basescan.org/tx/",
   mainnet: "https://basescan.org/tx/",
@@ -220,7 +233,7 @@ const Payments = () => {
               <div className="grid gap-1 text-xs text-muted-foreground">
                 <p><span className="font-medium text-foreground">Amount:</span> {lastResult.paymentAmount} USDC</p>
                 <p><span className="font-medium text-foreground">Recipient:</span> <span className="font-mono">{lastResult.recipient}</span></p>
-                <p><span className="font-medium text-foreground">Network:</span> {lastResult.network}</p>
+                <p><span className="font-medium text-foreground">Network:</span> {NETWORK_LABELS[lastResult.network || ""] || lastResult.network}</p>
                 <p><span className="font-medium text-foreground">HTTP Status:</span> {lastResult.status}</p>
               </div>
             </div>
@@ -266,7 +279,7 @@ const Payments = () => {
                       <TableCell className="text-xs whitespace-nowrap">
                         {p.amount} USDC
                       </TableCell>
-                      <TableCell className="text-xs">{p.network}</TableCell>
+                      <TableCell className="text-xs">{NETWORK_LABELS[p.network] || p.network}</TableCell>
                       <TableCell>{statusBadge(p.status)}</TableCell>
                       <TableCell>
                         {p.tx_hash ? (
