@@ -1,5 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { Connection, PublicKey, SystemProgram, Transaction, TransactionInstruction } from "https://esm.sh/@solana/web3.js@1.95.8";
+import { Buffer } from "https://deno.land/std@0.168.0/node/buffer.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -45,9 +47,17 @@ const ETH_NETWORKS: Record<string, { rpcUrl: string; usdcAddress: string }> = {
   base:         { rpcUrl: "https://mainnet.base.org", usdcAddress: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" },
 };
 
+// Helper: get Solana RPC URL (supports custom mainnet RPC via env var)
+function getSolanaRpcUrl(chainKey: string): string {
+  if (chainKey === "solana") {
+    return Deno.env.get("SOLANA_MAINNET_RPC_URL") || "https://api.mainnet-beta.solana.com";
+  }
+  return "https://api.devnet.solana.com";
+}
+
 const SOLANA_NETWORKS: Record<string, { rpcUrl: string; usdcMint: string }> = {
-  solana_devnet: { rpcUrl: "https://api.devnet.solana.com", usdcMint: "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU" },
-  solana:        { rpcUrl: "https://api.mainnet-beta.solana.com", usdcMint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v" },
+  solana_devnet: { rpcUrl: getSolanaRpcUrl("solana_devnet"), usdcMint: "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU" },
+  solana:        { rpcUrl: getSolanaRpcUrl("solana"),        usdcMint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v" },
 };
 
 const STORY_NETWORKS: Record<string, { rpcUrl: string; usdceAddress: string | null }> = {
@@ -703,8 +713,147 @@ serve(async (req) => {
           }
 
           result = { chain: chainKey, network: chainInfo?.network, txHash, data: { hash: txHash } };
+        } else if (body.to_address && body.amount) {
+          // ── Server-side transaction building (avoids browser CORS/403 issues) ──
+          const solConfig = SOLANA_NETWORKS[chainKey];
+          if (!solConfig) return jsonError(`No Solana RPC config for ${chainKey}`);
+
+          const rpcUrl = solConfig.rpcUrl;
+          const tokenType = body.token_type || "native";
+          const toAddress = body.to_address as string;
+          const amount = body.amount as string;
+
+          const connection = new Connection(rpcUrl, "processed");
+          const fromPubkey = new PublicKey(wallet.address);
+          const toPubkey = new PublicKey(toAddress);
+
+          const { blockhash } = await connection.getLatestBlockhash("processed");
+
+          const transaction = new Transaction();
+          transaction.recentBlockhash = blockhash;
+          transaction.feePayer = fromPubkey;
+
+          if (tokenType === "usdc") {
+            // SPL USDC transfer
+            const usdcMintPubkey = new PublicKey(solConfig.usdcMint);
+            const TOKEN_PROGRAM = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+            const ATA_PROGRAM = new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
+
+            // Compute ATAs
+            const [fromAta] = PublicKey.findProgramAddressSync(
+              [fromPubkey.toBytes(), TOKEN_PROGRAM.toBytes(), usdcMintPubkey.toBytes()],
+              ATA_PROGRAM
+            );
+            const [toAta] = PublicKey.findProgramAddressSync(
+              [toPubkey.toBytes(), TOKEN_PROGRAM.toBytes(), usdcMintPubkey.toBytes()],
+              ATA_PROGRAM
+            );
+
+            // Check if recipient ATA exists
+            const toAtaInfo = await connection.getAccountInfo(toAta);
+            if (!toAtaInfo) {
+              // Create ATA instruction
+              transaction.add(new TransactionInstruction({
+                programId: ATA_PROGRAM,
+                keys: [
+                  { pubkey: fromPubkey, isSigner: true, isWritable: true },
+                  { pubkey: toAta, isSigner: false, isWritable: true },
+                  { pubkey: toPubkey, isSigner: false, isWritable: false },
+                  { pubkey: usdcMintPubkey, isSigner: false, isWritable: false },
+                  { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+                  { pubkey: TOKEN_PROGRAM, isSigner: false, isWritable: false },
+                ],
+                data: Buffer.alloc(0),
+              }));
+            }
+
+            // TransferChecked instruction
+            const decimals = 6;
+            const rawAmount = BigInt(Math.floor(parseFloat(amount) * 10 ** decimals));
+            const transferData = Buffer.alloc(10);
+            transferData.writeUInt8(12, 0); // TransferChecked opcode
+            transferData.writeBigUInt64LE(rawAmount, 1);
+            transferData.writeUInt8(decimals, 9);
+
+            transaction.add(new TransactionInstruction({
+              programId: TOKEN_PROGRAM,
+              keys: [
+                { pubkey: fromAta, isSigner: false, isWritable: true },
+                { pubkey: usdcMintPubkey, isSigner: false, isWritable: false },
+                { pubkey: toAta, isSigner: false, isWritable: true },
+                { pubkey: fromPubkey, isSigner: true, isWritable: false },
+              ],
+              data: transferData,
+            }));
+          } else {
+            // Native SOL transfer
+            const lamports = Math.floor(parseFloat(amount) * 1_000_000_000);
+            transaction.add(
+              SystemProgram.transfer({ fromPubkey, toPubkey, lamports })
+            );
+          }
+
+          const serialized = transaction.serialize({
+            requireAllSignatures: false,
+            verifySignatures: false,
+          });
+          const txBase64 = Buffer.from(serialized).toString("base64");
+
+          // Sign via Privy
+          const signResult = await privyFetch(
+            `/wallets/${wallet.id}/rpc`,
+            "POST",
+            PRIVY_APP_ID,
+            PRIVY_APP_SECRET,
+            {
+              method: "signTransaction",
+              params: { transaction: txBase64, encoding: "base64" },
+            }
+          );
+
+          const signedTxBase64 = signResult.data?.signed_transaction || signResult.signed_transaction;
+          if (!signedTxBase64) {
+            return jsonError("No signed transaction returned from Privy");
+          }
+
+          // Broadcast using base64 encoding (avoids base58 conversion)
+          const broadcastRes = await fetch(rpcUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              jsonrpc: "2.0",
+              id: 1,
+              method: "sendTransaction",
+              params: [signedTxBase64, { encoding: "base64", skipPreflight: false, preflightCommitment: "processed" }],
+            }),
+          });
+
+          const broadcastData = await broadcastRes.json();
+          if (broadcastData.error) {
+            return jsonError(`Solana broadcast error: ${JSON.stringify(broadcastData.error)}`);
+          }
+
+          const txHash = broadcastData.result;
+
+          // Record transaction
+          try {
+            await serviceClient.from("wallet_transactions").insert({
+              agent_id: agent.id,
+              chain: chainKey,
+              token_type: tokenType,
+              from_address: wallet.address,
+              to_address: toAddress,
+              amount: amount,
+              tx_hash: txHash || null,
+              status: "success",
+            });
+          } catch (e) {
+            console.error("Failed to record SOL tx:", e);
+          }
+
+          result = { chain: chainKey, network: chainInfo?.network, txHash, data: { hash: txHash } };
         } else {
-          return jsonError("Provide a serialized transaction in base64 format as 'transaction'");
+          return jsonError("Provide either a serialized 'transaction' or 'to_address' and 'amount' parameters");
         }
         break;
       }
