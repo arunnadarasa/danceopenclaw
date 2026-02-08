@@ -1,108 +1,102 @@
 
 
-## Build Shop, Events, Network (Mock Data) and Settings (Real)
+## Add Full-Screen Chat Page with Persistent Conversations
 
 ### Overview
 
-Build out the four placeholder pages into fully functional UIs. Shop, Events, and Network will use hardcoded mock data styled consistently with the existing dark-theme dashboard. Settings will be a real, functional page that reads/writes to the `profiles` and `agents` tables.
+Add a dedicated Chat page (ChatGPT-style) in the sidebar with conversation persistence. Conversations started in the floating chatbot widget will also be saved and visible on this page. The page features a sidebar of past conversations, the ability to start new chats, and full message history stored in the database.
 
----
+### Database
 
-### 1. Shop Page (Mock Data)
+Two new tables:
 
-A dance merch marketplace layout with mock product cards.
+**`chat_conversations`** -- stores each conversation thread
+- `id` (uuid, PK, default gen_random_uuid())
+- `user_id` (uuid, not null) -- references the authenticated user
+- `title` (text, default 'New Chat') -- auto-generated from first message
+- `created_at` (timestamptz, default now())
+- `updated_at` (timestamptz, default now())
 
-**Mock data**: 8-10 products (e.g., "Breaking Crew Tee", "Popping Gloves", "Dance Battle Hoodie") with prices in USDC, category tags, and placeholder images via `https://placehold.co`.
+**`chat_messages`** -- stores individual messages within a conversation
+- `id` (uuid, PK, default gen_random_uuid())
+- `conversation_id` (uuid, not null, FK to chat_conversations.id ON DELETE CASCADE)
+- `role` (text, not null) -- 'user' or 'assistant'
+- `content` (text, not null)
+- `created_at` (timestamptz, default now())
 
-**Layout**:
-- Page header with icon + title/subtitle (matching Wallet page pattern)
-- Filter chips for categories (Apparel, Accessories, Music, Gear)
-- Responsive product grid (`sm:grid-cols-2 lg:grid-cols-3`)
-- Each product card: image, title, price badge, category badge, "Add to Cart" button (disabled with "Coming Soon" tooltip)
+RLS policies:
+- Users can only SELECT, INSERT, UPDATE, DELETE their own conversations
+- Users can only SELECT, INSERT their own messages (via join to conversations)
 
----
+### New Files
 
-### 2. Events Page (Mock Data)
+**`src/pages/Chat.tsx`** -- Full-screen chat page
+- Left panel: scrollable list of past conversations with titles and timestamps, "New Chat" button at top
+- Main panel: full-height message area with markdown rendering (reusing the same ReactMarkdown + remarkGfm setup as the floating widget)
+- Bottom input bar with send button
+- On selecting a conversation, loads its messages from `chat_messages`
+- On sending a message, saves it to the database, streams the response via `openclaw-chat`, and saves the assistant reply when done
+- Auto-generates conversation title from the first user message (truncated to ~50 chars)
+- Responsive: on mobile, conversation list becomes a collapsible drawer
 
-A dance events listing with battle, workshop, and cypher event types.
+**`src/hooks/useChatConversations.ts`** -- React hook for conversation CRUD
+- `fetchConversations()` -- loads all conversations for the user, ordered by `updated_at` desc
+- `createConversation(title)` -- inserts a new conversation row
+- `deleteConversation(id)` -- deletes a conversation (cascades messages)
+- `renameConversation(id, title)` -- updates the title
+- `fetchMessages(conversationId)` -- loads all messages for a conversation
+- `saveMessage(conversationId, role, content)` -- inserts a message and updates `updated_at` on the conversation
 
-**Mock data**: 6-8 events with titles, dates, locations, event types, and attendee counts.
+### Modified Files
 
-**Layout**:
-- Page header with icon + title/subtitle
-- Tab filters: All, Battles, Workshops, Cyphers
-- Event cards in a vertical list or 2-column grid
-- Each card: date badge (month/day), title, location, event type badge, attendee count, "RSVP" button (disabled, "Coming Soon")
+**`src/components/dashboard/Sidebar.tsx`** -- Add "Chat" nav item between "Network" and "Moltbook" with `MessageCircle` icon pointing to `/chat`
 
----
+**`src/App.tsx`** -- Add `/chat` route inside the authenticated dashboard layout
 
-### 3. Network Page (Mock Data)
+**`src/components/dashboard/OpenClawChat.tsx`** -- Update the floating widget to also persist messages:
+- When sending a message from the widget, save it to a "widget" conversation in the database
+- When receiving a complete assistant response (`onDone`), save it too
+- This way, conversations started in the widget appear on the Chat page
 
-A dancer discovery/social directory page.
+### Chat Page Layout
 
-**Mock data**: 8-10 dancer profiles with names, dance styles, profile images (placeholder avatars), karma/follower counts, and online status.
+```text
++---------------------+---------------------------------------------+
+| Conversations       |  Chat Title                                 |
+|---------------------|---------------------------------------------|
+| [+ New Chat]        |                                             |
+|                     |  [user bubble]     "hello, who are..."      |
+| > Today             |                                             |
+|   Krump History     |  [assistant bubble] "Yo! Krump was..."      |
+|   Dance Moves       |                                             |
+|                     |                                             |
+| > Yesterday         |                                             |
+|   Token Transfer    |                                             |
+|                     |                                             |
+|                     |---------------------------------------------|
+|                     |  [input]                         [Send]     |
++---------------------+---------------------------------------------+
+```
 
-**Layout**:
-- Page header with icon + title/subtitle
-- Search input (non-functional, for visual purposes)
-- Responsive grid of profile cards (`sm:grid-cols-2 lg:grid-cols-3`)
-- Each card: avatar, display name, dance style badges, karma count, "Connect" button (disabled, "Coming Soon")
+### Message Flow
 
----
-
-### 4. Settings Page (Real, Functional)
-
-A real settings page with two sections that read/write to the database.
-
-**Profile Section** (reads/writes `profiles` table):
-- Display name input
-- Bio textarea
-- Dance styles multi-select (same style chips as Onboarding page)
-- Wallet address input (read-only display if set)
-- Save button that calls `supabase.from("profiles").update(...)` 
-
-**Agent Section** (reads/writes `agents` table):
-- Agent name input
-- Budget limit input (numeric, USDC)
-- Auto-tip toggle (Switch component)
-- Agent status display (read-only badge)
-- Save button that calls `supabase.from("agents").update(...)`
-
-**Account Section** (read-only info + sign out):
-- Email display (from auth context)
-- Role display (from `user_roles` table)
-- Member since date
-- Sign out button
-
-**Data flow**:
-- On mount: fetch profile, agent, and role data using `useAuth()` user ID
-- Save handlers update the respective tables and show success/error toasts
-- Uses existing `supabase` client, `useAuth`, `toast` patterns
-
----
+1. User types a message and hits send
+2. Message is saved to `chat_messages` with role='user'
+3. Full conversation history is sent to `openclaw-chat` edge function for streaming
+4. Tokens stream in and render progressively (same as floating widget)
+5. When streaming completes (`onDone`), the full assistant response is saved to `chat_messages` with role='assistant'
+6. The conversation's `updated_at` is bumped, and the title is auto-set from the first user message if it's still "New Chat"
 
 ### Technical Details
 
-**Files created**:
+| File | Action | Description |
+|------|--------|-------------|
+| Database migration | Create | `chat_conversations` and `chat_messages` tables with RLS |
+| `src/hooks/useChatConversations.ts` | Create | Hook for conversation and message CRUD |
+| `src/pages/Chat.tsx` | Create | Full-screen ChatGPT-style chat page |
+| `src/components/dashboard/Sidebar.tsx` | Edit | Add "Chat" nav item |
+| `src/App.tsx` | Edit | Add `/chat` route |
+| `src/components/dashboard/OpenClawChat.tsx` | Edit | Persist widget messages to database |
 
-| File | Description |
-|------|-------------|
-| `src/pages/Shop.tsx` | Rewrite with mock product grid |
-| `src/pages/Events.tsx` | Rewrite with mock event listings |
-| `src/pages/Network.tsx` | Rewrite with mock dancer profiles |
-| `src/pages/Settings.tsx` | Full rewrite with real profile/agent/account settings |
-
-**No new dependencies** -- uses existing UI components (Card, Button, Input, Textarea, Badge, Tabs, Switch, Separator).
-
-**No database changes** -- Settings page uses existing `profiles`, `agents`, and `user_roles` tables which already have the correct RLS policies for user self-service updates.
-
-**No route changes** -- all four routes already exist in `App.tsx`.
-
-**Patterns followed**:
-- `space-y-6` page wrapper with icon + heading header (same as Wallet, Payments, Dashboard)
-- `font-display` for headings, `text-muted-foreground` for subtitles
-- Card components with `CardHeader`/`CardContent` for sections
-- Loading state with centered `Loader2` spinner
-- Toast notifications for save success/failure
-- Responsive grid with `sm:grid-cols-2 lg:grid-cols-3` breakpoints
+No new dependencies required -- reuses existing ReactMarkdown, remarkGfm, framer-motion, and the `streamChat` helper from `@/lib/openclaw-stream`.
 
